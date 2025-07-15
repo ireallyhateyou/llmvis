@@ -2,11 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>LLM Visualizer</title>
+  <title>LLMVis</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>LLM Visualizer</h1>
+  <h1>LLMVis</h1>
+  <p>Visualize language models.</p>
   <label for="model-picker">Model:</label>
   <select id="model-picker">
     <option value="markov">Markov Chain</option>
@@ -14,27 +15,44 @@
   </select>
   <div id="markov-container" style="display: block;">
     <h2>Markov Chain Visualizer</h2>
-    <textarea id="inputText" rows="6" cols="60" placeholder="Paste your training text here..."></textarea>
-    <br>
-    <label>Order: <input type="number" id="order" min="1" max="5" value="2"></label>
-    <button id="trainBtn">Train Model</button>
-    <button id="generateBtn" disabled>Generate Text</button>
-    <br>
-    <label>Seed: <input type="text" id="seed" placeholder="(optional)"></label>
-    <label>Max Words: <input type="number" id="maxWords" value="50"></label>
-    <div id="output" style="margin:1em 0; min-height:2em;"></div>
-    <canvas id="graphCanvas" width="800" height="500" style="display:block; margin-top:2em; background:#fff; border:1px solid #eee;"></canvas>
+    <form id="markov-form" autocomplete="off" onsubmit="return false;">
+      <textarea id="inputText" rows="6" cols="60" placeholder="Paste your training text here..."></textarea>
+      <div class="markov-row single">
+        <div class="markov-label-input">
+          <label for="order">Order:</label>
+          <input type="number" id="order" min="1" max="5" value="2">
+        </div>
+      </div>
+      <div class="markov-row single">
+        <div class="markov-label-input">
+          <label for="seed">Seed:</label>
+          <input type="text" id="seed" placeholder="(optional)">
+        </div>
+      </div>
+      <div class="markov-row single">
+        <div class="markov-label-input">
+          <label for="maxWords">Max Words:</label>
+          <input type="number" id="maxWords" value="50">
+        </div>
+      </div>
+      <div id="output" style="margin:1em 0; min-height:2em;"></div>
+      <div class="markov-row" id="markov-btn-row">
+        <button id="trainBtn" type="button">Train Model</button>
+        <button id="generateBtn" type="button" disabled>Generate Text</button>
+      </div>
+    </form>
+    <canvas id="graphCanvas" style="display:block; margin-top:2em; background:#fff; border:1px solid #eee;"></canvas>
   </div>
   <div id="eliza-container" style="display: none;">
-    <h2>ELIZA Rule Tree</h2>
-    <div id="eliza-input-area">
-      <input type="text" id="eliza-input" placeholder="Say something to ELIZA...">
-      <button id="eliza-send">Send</button>
-      <button id="eliza-collapse-tree" style="display:none; margin-left:1em;">Collapse Tree</button>
+    <h2>ELIZA</h2>
+    <div id="eliza-chat-area">
+      <div id="eliza-chat-log"></div>
+      <form id="eliza-input-area" autocomplete="off" onsubmit="return false;">
+        <input type="text" id="eliza-input" placeholder="Say something to ELIZA..." autocomplete="off">
+        <button id="eliza-send" type="submit">Send</button>
+      </form>
     </div>
-    <div id="eliza-response" style="margin:1em 0;font-size:1.2em;font-weight:bold;"></div>
     <div id="eliza-match-path"></div>
-    <!-- The tree is always present, only the root is shown when collapsed -->
     <div id="eliza-tree" style="display:block;"></div>
   </div>
   <script src="markov.js"></script>
@@ -73,7 +91,6 @@
     function renderElizaTree(matchedPath) {
       const tree = window.buildElizaRuleTree();
       const container = document.getElementById('eliza-tree');
-      // Always show the root node
       function renderNode(node, path = []) {
         const isRoot = path.length === 0;
         const expanded = elizaTreeState.expanded[node.name] || isRoot;
@@ -103,27 +120,45 @@
       container.appendChild(ul);
     }
 
-    // On prompt, auto-expand matched path
-    document.getElementById('eliza-send').onclick = function() {
-      const input = document.getElementById('eliza-input').value;
+    // --- ELIZA Chat Bubble Logic ---
+    const chatLog = document.getElementById('eliza-chat-log');
+    const inputForm = document.getElementById('eliza-input-area');
+    const inputBox = document.getElementById('eliza-input');
+    function addChatBubble(text, sender) {
+      const bubble = document.createElement('div');
+      bubble.className = 'chat-bubble ' + (sender === 'eliza' ? 'eliza-bubble' : 'user-bubble');
+      if (sender === 'eliza') {
+        bubble.innerHTML = `<span class="eliza-avatar">🧑‍⚕️</span><span class="bubble-text">${text}</span>`;
+      } else {
+        bubble.innerHTML = `<span class="bubble-text">${text}</span>`;
+      }
+      chatLog.appendChild(bubble);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+    // Initial ELIZA greeting
+    addChatBubble((new ElizaBot()).getInitial(), 'eliza');
+
+    inputForm.onsubmit = function() {
+      const input = inputBox.value.trim();
+      if (!input) return false;
+      addChatBubble(input, 'user');
+      inputBox.value = '';
       const match = window.elizaMatchPath(input);
-      const responseDiv = document.getElementById('eliza-response');
-      const matchDiv = document.getElementById('eliza-match-path');
+      let response = '';
       if (match) {
-        // Expand all nodes in the matched path
         elizaTreeState.expanded = { 'ELIZA': true };
         for (const name of match) {
           elizaTreeState.expanded[name] = true;
         }
         renderElizaTree(match);
-        // Show response at top, with variable and (n) substitution
-        const response = window.elizaSubstitute(match[2], match[3] || {}, match[4] || []);
-        responseDiv.textContent = response;
-        matchDiv.innerHTML = `<b>Matched:</b> <br>Keyword: <code>${match[0]}</code><br>Decomp: <code>${match[1]}</code><br>Response: <code>${match[2]}</code>`;
+        response = window.elizaSubstitute(match[2], match[3] || {}, match[4] || []);
+        document.getElementById('eliza-match-path').innerHTML = `<b>Matched:</b> <br>Keyword: <code>${match[0]}</code><br>Decomp: <code>${match[1]}</code><br>Response: <code>${match[2]}</code>`;
       } else {
-        responseDiv.textContent = '';
-        matchDiv.textContent = '';
+        response = '';
+        document.getElementById('eliza-match-path').textContent = '';
       }
+      setTimeout(() => addChatBubble(response, 'eliza'), 400);
+      return false;
     };
     // Initial render
     renderElizaTree();

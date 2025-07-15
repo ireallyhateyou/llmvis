@@ -16,16 +16,477 @@
   stroke-linejoin: round;
 }
 
-ul { margin-left: 1em; padding-left: 1em; border-left: 1px solid #ccc; }
-li.keyword { color: #2a5d9f; font-weight: bold; }
-li.decomp { color: #7a3e9d; }
-li.reasmb { color: #228b22; font-style: italic; }
-#eliza-match-path { margin-top: 1em; background: #f8f8f8; padding: 0.5em; border-radius: 4px; }
-#eliza-input-area { margin-top: 1em; }
-.eliza-highlight {
-  background: #ffe066;
-  border: 2px solid #ffb347;
-  border-radius: 4px;
-  padding: 2px 4px;
+body {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  background: #2d1b0e url('data:image/svg+xml;utf8,<svg width="100%25" height="100%25" xmlns="http://www.w3.org/2000/svg"><rect fill="%232d1b0e" width="100%25" height="100%25"/><path d="M0 100 Q50 200 100 100 T200 100 T300 100 T400 100 T500 100 T600 100 T700 100 T800 100 T900 100 T1000 100" stroke="%23432a16" stroke-width="8" fill="none"/><path d="M0 300 Q50 400 100 300 T200 300 T300 300 T400 300 T500 300 T600 300 T700 300 T800 300 T900 300 T1000 300" stroke="%23432a16" stroke-width="8" fill="none"/></svg>');
+  background-size: cover;
+  min-height: 100vh;
+  color: #f5e9d6;
+}
+
+h1 {
+  text-align: center;
+  font-size: 2.7em;
+  letter-spacing: 2px;
+  color: #f5e9d6;
+  margin-top: 1.2em;
+  margin-bottom: 0.5em;
+  text-shadow: 0 2px 12px #432a16, 0 1px 0 #fff2cc;
+  font-family: 'Georgia', 'Times New Roman', serif;
+}
+
+#eliza-container, #markov-container {
+  max-width: 700px;
+  margin: 3em auto 0 auto;
+  background: linear-gradient(120deg, #3e2412 80%, #5a3a1b 100%);
+  border-radius: 22px;
+  box-shadow: 0 8px 48px 0 #1a0d05cc, 0 1.5px 0 #fffbe6;
+  padding: 2.5em 2.5em 2em 2.5em;
+  border: 3px solid #c9a86a;
+  position: relative;
+  z-index: 1;
+}
+
+#eliza-chat-area {
+  background: linear-gradient(120deg, #4b2e1a 80%, #2d1b0e 100%);
+  border-radius: 18px;
+  box-shadow: 0 4px 32px 0 #1a0d05cc;
+  padding: 1.5em 1.2em 1.2em 1.2em;
+  max-width: 520px;
+  margin: 2em auto 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  border: 2.5px solid #c9a86a;
+}
+#eliza-chat-log {
+  min-height: 220px;
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7em;
+  padding-bottom: 0.5em;
+  margin-bottom: 1em;
+  background: #2d1b0e;
+  border-radius: 12px;
+  border: 1.5px solid #c9a86a;
+  box-shadow: 0 2px 8px #c9a86a33;
+}
+.chat-bubble {
+  display: flex;
+  align-items: flex-end;
+  max-width: 85%;
+  font-size: 1.08em;
+  line-height: 1.5;
+  border-radius: 18px;
+  padding: 0.7em 1.1em;
+  box-shadow: 0 2px 8px #c9a86a33;
+  margin-bottom: 0.1em;
+  animation: bubble-in 0.4s cubic-bezier(.5,1.8,.5,1);
+}
+@keyframes bubble-in {
+  0% { transform: translateY(16px) scale(0.95); opacity: 0; }
+  80% { transform: scale(1.03); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.eliza-bubble {
+  background: linear-gradient(90deg, #6b4a2b 80%, #c9a86a 100%);
+  color: #fffbe6;
+  border-bottom-left-radius: 4px;
+  border-top-left-radius: 24px;
+  border-top-right-radius: 18px;
+  border-bottom-right-radius: 18px;
+  margin-right: auto;
+  margin-left: 0;
+  border: 1.5px solid #c9a86a;
+  position: relative;
+}
+.eliza-avatar {
+  font-size: 1.7em;
+  margin-right: 0.7em;
+  vertical-align: middle;
+  filter: drop-shadow(0 1px 0 #fffbe6);
+}
+.user-bubble {
+  background: linear-gradient(90deg, #3e2412 60%, #c9a86a 100%);
+  color: #fffbe6;
+  border-bottom-right-radius: 4px;
+  border-top-right-radius: 24px;
+  border-top-left-radius: 18px;
+  border-bottom-left-radius: 18px;
+  margin-left: auto;
+  margin-right: 0;
+  border: 1.5px solid #c9a86a;
+  position: relative;
+}
+.bubble-text {
+  display: inline-block;
+  vertical-align: middle;
+  word-break: break-word;
+}
+#eliza-input-area {
+  display: flex;
+  gap: 0.7em;
+  margin-top: 0.5em;
+  margin-bottom: 0.2em;
+  align-items: center;
+}
+#eliza-input {
+  flex: 1;
+  padding: 0.7em 1em;
+  border-radius: 18px;
+  border: 1.5px solid #c9a86a;
+  font-size: 1.1em;
+  background: #3e2412;
+  color: #fffbe6;
+  transition: border 0.2s;
+  font-family: inherit;
+}
+#eliza-input:focus {
+  border: 1.5px solid #ffe066;
+  outline: none;
+  background: #5a3a1b;
+}
+#eliza-send {
+  background: linear-gradient(90deg, #c9a86a 0%, #ffe066 100%);
+  color: #432a16;
+  border: none;
+  border-radius: 18px;
+  padding: 0.7em 1.3em;
+  font-size: 1.1em;
   font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 2px 8px #c9a86a44;
+  transition: background 0.2s, transform 0.1s;
+  font-family: inherit;
+}
+#eliza-send:hover {
+  background: linear-gradient(90deg, #ffe066 0%, #c9a86a 100%);
+  transform: translateY(-2px) scale(1.04);
+}
+#eliza-response {
+  background: #fff3cd;
+  border-left: 5px solid #ffd700;
+  border-radius: 8px;
+  padding: 1em 1.2em;
+  margin: 1.2em 0 0.7em 0;
+  font-size: 1.25em;
+  font-weight: 500;
+  color: #7a3e9d;
+  box-shadow: 0 2px 8px #ffe06633;
+  min-height: 2.2em;
+  animation: eliza-pop 0.4s cubic-bezier(.5,1.8,.5,1) 1;
+}
+@keyframes eliza-pop {
+  0% { transform: scale(0.95); opacity: 0; }
+  80% { transform: scale(1.03); opacity: 1; }
+  100% { transform: scale(1); }
+}
+/* Tree and misc elements */
+#eliza-tree {
+  margin-top: 2em;
+  background: #3e2412;
+  border-radius: 12px;
+  padding: 1.2em 1.5em;
+  box-shadow: 0 2px 12px #1a0d05cc;
+  border: 1.5px solid #c9a86a;
+  color: #ffe066;
+}
+ul { margin-left: 1em; padding-left: 1em; border-left: 1px solid #c9a86a; }
+li.keyword { color: #ffe066; font-weight: bold; font-size: 1.08em; }
+li.decomp { color: #c9a86a; font-style: italic; }
+li.reasmb { color: #ffe066; font-style: italic; }
+li:hover { background: #c9a86a33; border-radius: 4px; transition: background 0.2s; }
+#eliza-match-path {
+  margin-top: 1em;
+  background: #3e2412;
+  padding: 0.5em 1em;
+  border-radius: 8px;
+  border: 1.5px solid #c9a86a;
+  font-size: 1em;
+  color: #ffe066;
+  box-shadow: 0 1px 4px #c9a86a22;
+}
+.eliza-highlight {
+  background: linear-gradient(90deg, #432a16 80%, #c9a86a 100%);
+  border: 2px solid #ffe066;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-weight: bold;
+  box-shadow: 0 0 8px #ffe06677;
+  animation: eliza-glow 1.2s infinite alternate;
+  color: #ffe066;
+}
+@keyframes eliza-glow {
+  from { box-shadow: 0 0 8px #ffe06677; }
+  to { box-shadow: 0 0 24px #ffe066cc; }
+}
+/* --- Markov Textarea and Inputs --- */
+#inputText {
+  width: 100%;
+  min-height: 120px;
+  max-width: 100%;
+  font-size: 1.1em;
+  padding: 1em 1.2em;
+  border-radius: 18px;
+  border: 1.5px solid #c9a86a;
+  background: linear-gradient(120deg, #3e2412 80%, #5a3a1b 100%);
+  color: #fffbe6;
+  box-shadow: 0 2px 8px #c9a86a33;
+  margin-bottom: 1.2em;
+  font-family: inherit;
+  resize: vertical;
+  transition: border 0.2s, background 0.2s;
+}
+#inputText:focus {
+  border: 1.5px solid #ffe066;
+  background: #5a3a1b;
+  outline: none;
+}
+#markov-container label, #markov-container input[type="number"], #markov-container input[type="text"] {
+  font-size: 1.08em;
+  color: #ffe066;
+  margin-right: 0.7em;
+  margin-bottom: 0.5em;
+}
+#markov-container input[type="number"], #markov-container input[type="text"] {
+  padding: 0.6em 1em;
+  border-radius: 14px;
+  border: 1.5px solid #c9a86a;
+  background: #3e2412;
+  color: #fffbe6;
+  font-family: inherit;
+  margin-left: 0.3em;
+  margin-right: 1em;
+  margin-bottom: 0.5em;
+  box-shadow: 0 1px 4px #c9a86a22;
+  transition: border 0.2s, background 0.2s;
+}
+#markov-container input[type="number"]:focus, #markov-container input[type="text"]:focus {
+  border: 1.5px solid #ffe066;
+  background: #5a3a1b;
+  outline: none;
+}
+#markov-container button {
+  background: linear-gradient(90deg, #c9a86a 0%, #ffe066 100%);
+  color: #432a16;
+  border: none;
+  border-radius: 16px;
+  padding: 0.7em 1.3em;
+  font-size: 1.08em;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 2px 8px #c9a86a44;
+  margin-right: 0.7em;
+  margin-bottom: 0.5em;
+  font-family: inherit;
+  transition: background 0.2s, transform 0.1s;
+}
+#markov-container button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+#markov-container button:hover:not(:disabled) {
+  background: linear-gradient(90deg, #ffe066 0%, #c9a86a 100%);
+  transform: translateY(-2px) scale(1.04);
+}
+
+/* --- Responsive Design --- */
+@media (max-width: 700px) {
+  #eliza-container, #markov-container {
+    max-width: 98vw;
+    padding: 1.2em 0.2em 1em 0.2em;
+    margin: 1.5em auto 0 auto;
+  }
+  #eliza-chat-area {
+    max-width: 98vw;
+    padding: 1em 0.5em 0.8em 0.5em;
+  }
+  #eliza-tree {
+    padding: 0.7em 0.5em;
+  }
+  #inputText {
+    font-size: 1em;
+    padding: 0.7em 0.7em;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+}
+@media (max-width: 480px) {
+  body {
+    font-size: 0.98em;
+  }
+  h1 {
+    font-size: 1.5em;
+    margin-top: 0.7em;
+  }
+  #eliza-container, #markov-container {
+    padding: 0.5em 0.1em 0.5em 0.1em;
+    border-width: 2px;
+  }
+  #eliza-chat-area {
+    padding: 0.5em 0.1em 0.5em 0.1em;
+    border-width: 1.5px;
+  }
+  #inputText {
+    font-size: 0.98em;
+    padding: 0.5em 0.5em;
+    min-height: 80px;
+  }
+  #markov-container label, #markov-container input[type="number"], #markov-container input[type="text"] {
+    font-size: 0.98em;
+  }
+  #markov-container button {
+    font-size: 0.98em;
+    padding: 0.5em 0.7em;
+    border-radius: 12px;
+  }
+} 
+
+/* --- Markov Form Layout Improvements --- */
+#markov-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+#markov-container h2 {
+  text-align: center;
+  width: 100%;
+}
+#markov-form {
+  width: 100%;
+  display: block;
+}
+.markov-row,
+#markov-btn-row {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-top: 0.7em;
+  margin-bottom: 0;
+  padding: 0;
+}
+.markov-row.single {
+  margin-top: 0.7em;
+}
+.markov-row.single:first-of-type {
+  margin-top: 0;
+}
+.markov-label-input {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 0.7em;
+  width: auto;
+  white-space: nowrap;
+}
+.markov-label-input label {
+  display: inline-block !important;
+  margin-bottom: 0 !important;
+  min-width: 90px;
+}
+.markov-label-input input[type="number"],
+.markov-label-input input[type="text"] {
+  width: 120px;
+  min-width: 60px;
+  max-width: 180px;
+  flex: 0 1 auto;
+  box-sizing: border-box;
+}
+#inputText {
+  margin-bottom: 1.2em;
+}
+#output {
+  text-align: center;
+  width: 100%;
+}
+#markov-btn-row {
+  justify-content: stretch;
+  gap: 0.7em;
+}
+#markov-btn-row button {
+  width: 100%;
+  margin: 0;
+}
+@media (max-width: 700px) {
+  #markov-form, .markov-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1em;
+  }
+  .markov-label-input {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2em;
+  }
+  #markov-container button {
+    width: 100%;
+    font-size: 1em;
+    padding: 0.7em 0.5em;
+    border-radius: 12px;
+    margin-bottom: 0.7em;
+    margin-right: 0;
+  }
+  #markov-container .markov-row {
+    margin-bottom: 1.2em;
+  }
+  #inputText {
+    font-size: 1em;
+    padding: 0.7em 0.7em;
+    min-height: 80px;
+  }
+  #markov-container input[type="number"], #markov-container input[type="text"] {
+    font-size: 1em;
+    padding: 0.5em 0.7em;
+    border-radius: 10px;
+    margin-bottom: 0.5em;
+    margin-right: 0;
+  }
+} 
+
+#graphCanvas {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin-top: 0.7em !important;
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 10px;
+  box-shadow: 0 2px 12px #1a0d05cc;
+}
+@media (max-width: 700px) {
+  #graphCanvas {
+    width: 98vw !important;
+    height: 260px !important;
+    min-width: 0;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+@media (max-width: 480px) {
+  #graphCanvas {
+    height: 180px !important;
+  }
+} 
+
+.markov-row.single:last-of-type {
+  margin-bottom: 0;
+} 
+
+#markov-btn-row {
+  margin-top: 0.7em !important;
+  margin-bottom: 0 !important;
+  padding-top: 0 !important;
+}
+#markov-btn-row button:first-child {
+  margin-top: 0 !important;
+}
+.markov-row.single:last-of-type {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+.markov-row.single:last-of-type input {
+  margin-bottom: 0 !important;
 } 

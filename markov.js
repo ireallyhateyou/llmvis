@@ -698,10 +698,3 @@ window.addEventListener('DOMContentLoaded', function() {
     renderMarkovGraph(markov, highlightNgrams, path);
   };
 });
-
-function renderGenerationPath(markov, generatedText) {
-  // This function is not called by the new DOMContentLoaded block,
-  // but is kept as it was not explicitly removed by the user's new_code.
-  // It would typically call visualizeMarkovChain with the current markov instance
-  // and the generated path.
-} 
