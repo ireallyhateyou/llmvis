@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LLM Visualizer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>LLM Visualizer</h1>
+  <label for="model-picker">Model:</label>
+  <select id="model-picker">
+    <option value="markov">Markov Chain</option>
+    <option value="eliza">ELIZA</option>
+  </select>
+  <div id="markov-container" style="display: block;">
+    <h2>Markov Chain Visualizer</h2>
+    <textarea id="inputText" rows="6" cols="60" placeholder="Paste your training text here..."></textarea>
+    <br>
+    <label>Order: <input type="number" id="order" min="1" max="5" value="2"></label>
+    <button id="trainBtn">Train Model</button>
+    <button id="generateBtn" disabled>Generate Text</button>
+    <br>
+    <label>Seed: <input type="text" id="seed" placeholder="(optional)"></label>
+    <label>Max Words: <input type="number" id="maxWords" value="50"></label>
+    <div id="output" style="margin:1em 0; min-height:2em;"></div>
+    <canvas id="graphCanvas" width="800" height="500" style="display:block; margin-top:2em; background:#fff; border:1px solid #eee;"></canvas>
+  </div>
+  <div id="eliza-container" style="display: none;">
+    <h2>ELIZA Rule Tree</h2>
+    <div id="eliza-input-area">
+      <input type="text" id="eliza-input" placeholder="Say something to ELIZA...">
+      <button id="eliza-send">Send</button>
+      <button id="eliza-collapse-tree" style="display:none; margin-left:1em;">Collapse Tree</button>
+    </div>
+    <div id="eliza-response" style="margin:1em 0;font-size:1.2em;font-weight:bold;"></div>
+    <div id="eliza-match-path"></div>
+    <!-- The tree is always present, only the root is shown when collapsed -->
+    <div id="eliza-tree" style="display:block;"></div>
+  </div>
+  <script src="markov.js"></script>
+  <script src="elizabot.js"></script>
+  <script src="eliza.js"></script>
+  <script>
+    // Model picker logic
+    const modelPicker = document.getElementById('model-picker');
+    const markovContainer = document.getElementById('markov-container');
+    const elizaContainer = document.getElementById('eliza-container');
+    const elizaTree = document.getElementById('eliza-tree');
+    const elizaCollapseBtn = document.getElementById('eliza-collapse-tree');
+    modelPicker.addEventListener('change', function() {
+      if (this.value === 'eliza') {
+        markovContainer.style.display = 'none';
+        elizaContainer.style.display = 'block';
+        if (typeof renderMarkovVisualizer === 'function') {
+          renderMarkovVisualizer();
+        }
+      } else {
+        markovContainer.style.display = 'block';
+        elizaContainer.style.display = 'none';
+      }
+    });
+
+    // Collapsible tree state
+    let elizaTreeState = { expanded: { 'ELIZA': true } };
+
+    // Helper: get path to match (keyword, decomp, reasmb)
+    function getElizaMatchPath(match) {
+      if (!match) return [];
+      return ['ELIZA', match.keyword, match.decomp, match.reasmb];
+    }
+
+    // Render ELIZA rule tree as collapsible, auto-expanding to matchPath
+    function renderElizaTree(matchedPath) {
+      const tree = window.buildElizaRuleTree();
+      const container = document.getElementById('eliza-tree');
+      // Always show the root node
+      function renderNode(node, path = []) {
+        const isRoot = path.length === 0;
+        const expanded = elizaTreeState.expanded[node.name] || isRoot;
+        const highlight = matchedPath && matchedPath.includes(node.name);
+        const li = document.createElement('li');
+        li.textContent = node.name;
+        li.className = node.type + (highlight ? ' eliza-highlight' : '');
+        if (isRoot) {
+          li.style.cursor = 'pointer';
+          li.onclick = () => {
+            elizaTreeState.expanded[node.name] = !expanded;
+            renderElizaTree(matchedPath);
+          };
+        }
+        if (node.children && node.children.length && expanded) {
+          const ul = document.createElement('ul');
+          for (const child of node.children) {
+            ul.appendChild(renderNode(child, path.concat(node.name)));
+          }
+          li.appendChild(ul);
+        }
+        return li;
+      }
+      container.innerHTML = '';
+      const ul = document.createElement('ul');
+      ul.appendChild(renderNode(tree));
+      container.appendChild(ul);
+    }
+
+    // On prompt, auto-expand matched path
+    document.getElementById('eliza-send').onclick = function() {
+      const input = document.getElementById('eliza-input').value;
+      const match = window.elizaMatchPath(input);
+      const responseDiv = document.getElementById('eliza-response');
+      const matchDiv = document.getElementById('eliza-match-path');
+      if (match) {
+        // Expand all nodes in the matched path
+        elizaTreeState.expanded = { 'ELIZA': true };
+        for (const name of match) {
+          elizaTreeState.expanded[name] = true;
+        }
+        renderElizaTree(match);
+        // Show response at top, with variable and (n) substitution
+        const response = window.elizaSubstitute(match[2], match[3] || {}, match[4] || []);
+        responseDiv.textContent = response;
+        matchDiv.innerHTML = `<b>Matched:</b> <br>Keyword: <code>${match[0]}</code><br>Decomp: <code>${match[1]}</code><br>Response: <code>${match[2]}</code>`;
+      } else {
+        responseDiv.textContent = '';
+        matchDiv.textContent = '';
+      }
+    };
+    // Initial render
+    renderElizaTree();
+  </script>
+</body>
+</html> 

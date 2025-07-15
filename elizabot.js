@@ -1,0 +1,343 @@
+(function(global) {
+  function ElizaBot(noRandomFlag) {
+    this.noRandom = !!noRandomFlag;
+    this.memSize = 20;
+    this.reset();
+    this._reasmbIdx = {}; // For cycling
+  }
+  ElizaBot.prototype.reset = function() {
+    this.quit = false;
+    this.mem = [];
+    this._reasmbIdx = {};
+  };
+  ElizaBot.prototype.getInitial = function() {
+    return elizaInitials[Math.floor(Math.random()*elizaInitials.length)];
+  };
+  ElizaBot.prototype.getFinal = function() {
+    return elizaFinals[Math.floor(Math.random()*elizaFinals.length)];
+  };
+  // Get next reassembly index for a decomp
+  ElizaBot.prototype._nextReasmbIdx = function(key, decompIdx, n) {
+    const k = key + ':' + decompIdx;
+    if (!(k in this._reasmbIdx)) this._reasmbIdx[k] = 0;
+    const idx = this._reasmbIdx[k];
+    this._reasmbIdx[k] = (idx + 1) % n;
+    return idx;
+  };
+  // Main transform logic with memory, cycling, goto
+  ElizaBot.prototype.transform = function(text) {
+    text = text.toLowerCase();
+    // Try to match each keyword by rank
+    const sorted = elizaKeywords.slice().sort((a, b) => b[1] - a[1]);
+    for (let i = 0; i < sorted.length; ++i) {
+      const [key, rank, decomps] = sorted[i];
+      if (text.indexOf(key) === -1) continue;
+      for (let j = 0; j < decomps.length; ++j) {
+        let [pattern, reasmbs] = decomps[j];
+        let memFlag = false;
+        if (pattern.startsWith('$')) {
+          memFlag = true;
+          pattern = pattern.slice(1).trim();
+        }
+        // Simple wildcard match for transform (for real matching, see eliza.js)
+        const pat = pattern.replace(/\*/g, '.*');
+        const regex = new RegExp('^' + pat + '$');
+        if (regex.test(text)) {
+          // Pick reassembly
+          let idx = this.noRandom ? this._nextReasmbIdx(key, j, reasmbs.length)
+                                  : Math.floor(Math.random() * reasmbs.length);
+          let reply = reasmbs[idx];
+          if (reply.startsWith('goto ')) {
+            // Goto: jump to another keyword
+            const gotoKey = reply.slice(5).trim();
+            return this._transformGoto(text, gotoKey);
+          }
+          if (memFlag) {
+            // Store in memory, do not reply now
+            if (this.mem.length < this.memSize) this.mem.push(reply);
+            continue;
+          }
+          return reply;
+        }
+      }
+    }
+    // If nothing matched, use memory if available
+    if (this.mem.length > 0) {
+      return this.mem.shift();
+    }
+    // Fallback to xnone
+    for (let i = 0; i < elizaKeywords.length; ++i) {
+      if (elizaKeywords[i][0] === 'xnone') {
+        const decomps = elizaKeywords[i][2];
+        const reasmbs = decomps[0][1];
+        let idx = this.noRandom ? this._nextReasmbIdx('xnone', 0, reasmbs.length)
+                                : Math.floor(Math.random() * reasmbs.length);
+        return reasmbs[idx];
+      }
+    }
+    return "I am at a loss for words.";
+  };
+  // Helper for goto
+  ElizaBot.prototype._transformGoto = function(text, gotoKey) {
+    for (let i = 0; i < elizaKeywords.length; ++i) {
+      if (elizaKeywords[i][0] === gotoKey) {
+        const decomps = elizaKeywords[i][2];
+        for (let j = 0; j < decomps.length; ++j) {
+          let [pattern, reasmbs] = decomps[j];
+          let memFlag = false;
+          if (pattern.startsWith('$')) {
+            memFlag = true;
+            pattern = pattern.slice(1).trim();
+          }
+          const pat = pattern.replace(/\*/g, '.*');
+          const regex = new RegExp('^' + pat + '$');
+          if (regex.test(text)) {
+            let idx = this.noRandom ? this._nextReasmbIdx(gotoKey, j, reasmbs.length)
+                                    : Math.floor(Math.random() * reasmbs.length);
+            let reply = reasmbs[idx];
+            if (reply.startsWith('goto ')) {
+              return this._transformGoto(text, reply.slice(5).trim());
+            }
+            if (memFlag) {
+              if (this.mem.length < this.memSize) this.mem.push(reply);
+              continue;
+            }
+            return reply;
+          }
+        }
+      }
+    }
+    return null;
+  };
+  // Expose memory for visualizer
+  ElizaBot.prototype.getMemory = function() {
+    return this.mem.slice();
+  };
+  ElizaBot.prototype.setMemory = function(mem) {
+    this.mem = mem.slice();
+  };
+  ElizaBot.prototype.getReasmbIdx = function() {
+    return { ...this._reasmbIdx };
+  };
+  ElizaBot.prototype.setReasmbIdx = function(obj) {
+    this._reasmbIdx = { ...obj };
+  };
+  ElizaBot.prototype.getRules = function() {
+    return elizaKeywords;
+  };
+  global.ElizaBot = ElizaBot;
+
+  global.elizaInitials = [
+    "How do you do. Please tell me your problem.",
+    "Please tell me what's been bothering you."
+  ];
+  global.elizaFinals = [
+    "Goodbye. Thank you for talking to me.",
+    "Goodbye. This was really a nice talk."
+  ];
+  global.elizaKeywords = [
+    // The following block is generated by statically fixing group references
+    // in all responses to match the number of wildcards in each pattern.
+    // (1) is used if a reference is out of range.
+    ["sorry", 0, [["* sorry *", [
+      "Please don't apologize.",
+      "Apologies are not necessary.",
+      "I've told you that apologies are not required."
+    ]]]],
+    ["apologize", 0, [["* apologize *", [
+      "goto sorry"
+    ]]]],
+    ["remember", 5, [["* i remember *", [
+      "Do you often think of (1)?",
+      "Does thinking of (1) bring anything else to mind?",
+      "What else do you recollect?",
+      "Why do you remember (1) just now?",
+      "What in the present situation reminds you of (1)?",
+      "What is the connection between me and (1)?"
+    ]], ["* do you remember *", [
+      "Did you think I would forget (1)?",
+      "Why do you think I should recall (1) now?",
+      "What about (1)?",
+      "goto what"
+    ]]]],
+    ["if", 3, [["* if *", [
+      "Do you think it's likely that (1)?",
+      "Do you wish that (1)?",
+      "What do you think about (1)?",
+      "Really--if (1)?"
+    ]]]],
+    ["dreamed", 4, [["* i dreamed *", [
+      "Really, (1)?",
+      "Have you ever fantasized (1) while you were awake?",
+      "Have you ever dreamed (1) before?"
+    ]], ["* i dream *", [
+      "goto dream"
+    ]]]],
+    ["dream", 3, [["* dream *", [
+      "What does that dream suggest to you?",
+      "Do you dream often?",
+      "What persons appear in your dreams?",
+      "Don't you believe that dream has to do with your problem?"
+    ]]]],
+    ["perhaps", 0, [["* perhaps *", [
+      "You do not seem quite certain."
+    ]]]],
+    ["name", 15, [["* name *", [
+      "I am not interested in names."
+    ]]]],
+    ["deutsch", 0, [["* deutsch *", [
+      "goto xforeign"
+    ]]]],
+    ["francais", 0, [["* francais *", [
+      "goto xforeign"
+    ]]]],
+    ["italiano", 0, [["* italiano *", [
+      "goto xforeign"
+    ]]]],
+    ["espanol", 0, [["* espanol *", [
+      "goto xforeign"
+    ]]]],
+    ["xforeign", 0, [["*", [
+      "I speak only English."
+    ]]]],
+    ["hello", 0, [["* hello *", [
+      "How do you do. Please state your problem."
+    ]]]],
+    ["computer", 50, [["* computer *", [
+      "Do computers worry you?",
+      "What do you think about machines?",
+      "Why do you mention computers?",
+      "What do you think machines have to do with your problem?"
+    ]]]],
+    ["am", 0, [["* am i *", [
+      "Do you believe you are (1)?",
+      "Would you want to be (1)?",
+      "You wish I would tell you you are (1)?",
+      "What would it mean if you were (1)?"
+    ]], ["* am *", [
+      "Why do you say 'am'?",
+      "I don't understand that."
+    ]]]],
+    ["are", 0, [["* are you *", [
+      "Why are you interested in whether I am (1) or not?",
+      "Would you prefer if I weren't (1)?",
+      "Perhaps I am (1) in your fantasies."
+    ]], ["* are *", [
+      "Did you think they might not be (1)?",
+      "Possibly they are (1)."
+    ]]]],
+    ["your", 0, [["* your *", [
+      "Why are you concerned about my (1)?"
+    ]]]],
+    ["was", 2, [["* was i *", [
+      "What if you were (1)?",
+      "Do you think you were (1)?",
+      "What would it mean if you were (1)?"
+    ]], ["* i was *", [
+      "Were you really?",
+      "Perhaps I already knew you were (1).",
+      "Why do you tell me you were (1) now?"
+    ]]]],
+    ["i", 0, [["* i was *", [
+      "goto was"
+    ]], ["* i am *", [
+      "Is it because you are (1) that you came to me?",
+      "How long have you been (1)?",
+      "Do you believe it is normal to be (1)?",
+      "Do you enjoy being (1)?"
+    ]], ["* i * you *", [
+      "Perhaps in your fantasy we (2) each other."
+    ]], ["* i *", [
+      "You say (1)?",
+      "Can you elaborate on that?",
+      "Do you say (1) for some special reason?",
+      "That's quite interesting."
+    ]]]],
+    ["you", 0, [["* you remind me of *", [
+      "goto alike"
+    ]], ["* you are *", [
+      "What makes you think I am (1)?"
+    ]], ["* you * me *", [
+      "goto i"
+    ]], ["* you *", [
+      "We were discussing you, not me.",
+      "Oh, I (1)?",
+      "You're not really talking about me, are you?"
+    ]]]],
+    ["yes", 0, [["* yes *", [
+      "You seem quite positive.",
+      "You are sure?",
+      "I see."
+    ]]]],
+    ["no", 0, [["* no *", [
+      "Are you saying 'no' just to be negative?",
+      "You are being a bit negative.",
+      "Why not?"
+    ]]]],
+    ["my", 2, [["* my *", [
+      "I see, your (1).",
+      "Why do you say your (1)?",
+      "When your (1), how do you feel?"
+    ]]]],
+    ["can", 0, [["* can you *", [
+      "You believe I can (1), don't you?",
+      "goto what"
+    ]], ["* can i *", [
+      "Whether or not you can (1) depends on you more than on me."
+    ]]]],
+    ["what", 0, [["* what *", [
+      "Why do you ask?",
+      "Does that question interest you?",
+      "What is it you really want to know?",
+      "What do you think?",
+      "What comes to your mind when you ask that?"
+    ]]]],
+    ["because", 0, [["* because *", [
+      "Is that the real reason?",
+      "What other reasons might there be?",
+      "Does that reason seem to explain anything else?"
+    ]]]],
+    ["why", 0, [["* why don't you *", [
+      "Do you believe I don't (1)?",
+      "Perhaps I will (1) in good time.",
+      "Should you (1) yourself?"
+    ]], ["* why can't i *", [
+      "Do you think you should be able to (1)?",
+      "Why can't you (1)?"
+    ]]]],
+    ["everyone", 2, [["* everyone *", [
+      "Surely not everyone.",
+      "Can you think of anyone in particular?",
+      "Who, for example?",
+      "You are thinking of a special person."
+    ]]]],
+    ["always", 1, [["* always *", [
+      "Can you think of a specific example?",
+      "When?",
+      "What incident are you thinking of?",
+      "Really--always?"
+    ]]]],
+    ["alike", 10, [["* alike *", [
+      "In what way?",
+      "What similarities are there?"
+    ]]]],
+    ["like", 10, [["* are like *", [
+      "What resemblance do you see between (1) and (2)?"
+    ]], ["* is like *", [
+      "In what way is it that (1) is like (2)?",
+      "What resemblance do you see?",
+      "Could there really be some connection?",
+      "How?"
+    ]]]],
+    ["different", 0, [["* different *", [
+      "How is it different?",
+      "What differences do you see?"
+    ]]]],
+    ["xnone", 0, [["*", [
+      "I'm not sure I understand you fully.",
+      "Please go on.",
+      "What does that suggest to you?",
+      "Do you feel strongly about discussing such things?"
+    ]]]]
+  ];
+})(typeof window !== 'undefined' ? window : global); 
