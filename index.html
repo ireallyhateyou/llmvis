@@ -12,12 +12,12 @@
     <div id="model-picker-row">
       <label for="model-picker">Model:</label>
       <select id="model-picker">
+        <option value="eliza" selected>ELIZA</option>
         <option value="markov">Markov Chain</option>
-        <option value="eliza">ELIZA</option>
       </select>
     </div>
   </div>
-  <div id="markov-container" style="display: block;">
+  <div id="markov-container" style="display: none;">
     <h2>Markov Chain Visualizer</h2>
     <form id="markov-form" autocomplete="off" onsubmit="return false;">
       <textarea id="inputText" rows="6" cols="60" placeholder="Paste your training text here..."></textarea>
@@ -47,7 +47,7 @@
     </form>
     <canvas id="graphCanvas" style="display:block; margin-top:2em; background:#fff; border:1px solid #eee;"></canvas>
   </div>
-  <div id="eliza-container" style="display: none;">
+  <div id="eliza-container" style="display: block;">
     <h2>ELIZA</h2>
     <div id="eliza-chat-area">
       <div id="eliza-chat-log"></div>
@@ -67,19 +67,18 @@
     const modelPicker = document.getElementById('model-picker');
     const markovContainer = document.getElementById('markov-container');
     const elizaContainer = document.getElementById('eliza-container');
-    const elizaTree = document.getElementById('eliza-tree');
-    const elizaCollapseBtn = document.getElementById('eliza-collapse-tree');
     modelPicker.addEventListener('change', function() {
       if (this.value === 'eliza') {
         markovContainer.style.display = 'none';
         elizaContainer.style.display = 'block';
-        if (typeof renderMarkovVisualizer === 'function') {
-          renderMarkovVisualizer();
-        }
       } else {
         markovContainer.style.display = 'block';
         elizaContainer.style.display = 'none';
       }
+    });
+    // Ensure correct container is shown on load
+    window.addEventListener('DOMContentLoaded', function() {
+      modelPicker.dispatchEvent(new Event('change'));
     });
 
     // Collapsible tree state
@@ -175,27 +174,10 @@
         const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         arrow.setAttribute('d', `M${x1},${y1} Q${midX},${midY} ${x2},${y2}`);
         arrow.setAttribute('stroke', '#111');
-        arrow.setAttribute('stroke-width', '2.5');
+        arrow.setAttribute('stroke-width', '1.5');
         arrow.setAttribute('fill', 'none');
-        arrow.setAttribute('marker-end', 'url(#arrowhead)');
         svg.appendChild(arrow);
       });
-      // Arrowhead marker
-      const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-      const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-      marker.setAttribute('id', 'arrowhead');
-      marker.setAttribute('markerWidth', '8');
-      marker.setAttribute('markerHeight', '8');
-      marker.setAttribute('refX', '0');
-      marker.setAttribute('refY', '4');
-      marker.setAttribute('orient', 'auto-start-reverse');
-      const arrowHead = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-      arrowHead.setAttribute('points', '8,0 0,4 8,8');
-      arrowHead.setAttribute('fill', '#111');
-      marker.appendChild(arrowHead);
-      defs.appendChild(marker);
-      svg.appendChild(defs);
-      tree.appendChild(svg);
     }
 
     // --- ELIZA Chat Bubble Logic ---
