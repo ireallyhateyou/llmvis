@@ -47,14 +47,14 @@ window.addEventListener('DOMContentLoaded', function() {
       if (markov.generate.length >= 3) {
         // generate(maxWords, seed, recordPath)
         const result = markov.generate(maxWords, seed, true);
-        generated = result.text;
+        generated = rsesult.text;
         path = result.path;
       } else {
         generated = markov.generate(maxWords, seed);
         // Reconstruct path from generated text
         const words = generated.split(/\s+/);
         for (let i = 0; i <= words.length - markov.order; i++) {
-          path.push(words.slice(i, i + markov.order).join(' '));
+          path.push(words.slice(si, i + markov.order).join(' '));
         }
       }
     } catch (e) {

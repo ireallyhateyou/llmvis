@@ -3,10 +3,9 @@
 
 // Build a tree structure from ELIZA rules for visualization
 function buildElizaRuleTree() {
-  const rules = (new ElizaBot()).getRules();
   // Tree: root -> keywords -> decomps -> reassemblies
   const tree = { name: 'ELIZA', children: [] };
-  for (const keyword of rules) {
+  for (const keyword of elizaKeywords) {
     const [key, rank, decomps] = keyword;
     const keyNode = { name: key, type: 'keyword', children: [] };
     for (const decomp of decomps) {

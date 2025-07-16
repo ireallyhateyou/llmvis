@@ -7,12 +7,16 @@
 </head>
 <body>
   <h1>LLMVis</h1>
-  <p>Visualize language models.</p>
-  <label for="model-picker">Model:</label>
-  <select id="model-picker">
-    <option value="markov">Markov Chain</option>
-    <option value="eliza">ELIZA</option>
-  </select>
+  <div id="intro-section">
+    <p>Visualize language models.</p>
+    <div id="model-picker-row">
+      <label for="model-picker">Model:</label>
+      <select id="model-picker">
+        <option value="markov">Markov Chain</option>
+        <option value="eliza">ELIZA</option>
+      </select>
+    </div>
+  </div>
   <div id="markov-container" style="display: block;">
     <h2>Markov Chain Visualizer</h2>
     <form id="markov-form" autocomplete="off" onsubmit="return false;">
@@ -95,16 +99,26 @@
         const isRoot = path.length === 0;
         const expanded = elizaTreeState.expanded[node.name] || isRoot;
         const highlight = matchedPath && matchedPath.includes(node.name);
+        const isGoto = node.name && node.name.startsWith('goto ');
         const li = document.createElement('li');
-        li.textContent = node.name;
-        li.className = node.type + (highlight ? ' eliza-highlight' : '');
-        if (isRoot) {
-          li.style.cursor = 'pointer';
-          li.onclick = () => {
-            elizaTreeState.expanded[node.name] = !expanded;
-            renderElizaTree(matchedPath);
-          };
+        if (node.type === 'keyword') {
+          li.setAttribute('data-eliza-keyword', node.name);
         }
+        if (isGoto) {
+          li.className = node.type + ' eliza-goto' + (highlight ? ' eliza-highlight' : '');
+          const target = node.name.slice(5).trim();
+          li.setAttribute('data-eliza-goto-target', target);
+          li.innerHTML = `<span class="eliza-goto-arrow">↪</span> goto <b>${target}</b>`;
+        } else {
+          li.textContent = node.name;
+          li.className = node.type + (highlight ? ' eliza-highlight' : '');
+        }
+        if (!expanded) li.classList.add('eliza-collapsible');
+        li.onclick = (e) => {
+          e.stopPropagation();
+          elizaTreeState.expanded[node.name] = !expanded;
+          renderElizaTree(matchedPath);
+        };
         if (node.children && node.children.length && expanded) {
           const ul = document.createElement('ul');
           for (const child of node.children) {
@@ -116,8 +130,72 @@
       }
       container.innerHTML = '';
       const ul = document.createElement('ul');
-      ul.appendChild(renderNode(tree));
+      for (const child of tree.children) {
+        ul.appendChild(renderNode(child));
+      }
       container.appendChild(ul);
+      // Draw visual links for gotos
+      setTimeout(drawElizaGotoLinks, 0);
+    }
+
+    // Draw SVG arrows for gotos
+    function drawElizaGotoLinks() {
+      // Remove old SVG
+      const oldSvg = document.getElementById('eliza-goto-svg');
+      if (oldSvg) oldSvg.remove();
+      const tree = document.getElementById('eliza-tree');
+      const gotoNodes = tree.querySelectorAll('[data-eliza-goto-target]');
+      if (!gotoNodes.length) return;
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('id', 'eliza-goto-svg');
+      svg.style.position = 'absolute';
+      svg.style.left = '0';
+      svg.style.top = '0';
+      svg.style.width = '100%';
+      svg.style.height = tree.offsetHeight + 'px';
+      svg.style.pointerEvents = 'none';
+      tree.style.position = 'relative';
+      // For each goto, draw an arrow to the target
+      gotoNodes.forEach(gotoNode => {
+        const targetKey = gotoNode.getAttribute('data-eliza-goto-target');
+        const targetNode = tree.querySelector(`[data-eliza-keyword="${targetKey}"]`);
+        if (!targetNode) return;
+        const gotoRect = gotoNode.getBoundingClientRect();
+        const targetRect = targetNode.getBoundingClientRect();
+        const treeRect = tree.getBoundingClientRect();
+        // Vertically center the arrow on both nodes
+        const y1 = gotoRect.top + gotoRect.height/2 - treeRect.top;
+        const y2 = targetRect.top + targetRect.height/2 - treeRect.top;
+        // Start at right middle of goto, end at right middle of target
+        const x1 = gotoRect.right - treeRect.left + 5;
+        const x2 = targetRect.right - treeRect.left + 5;
+        // Control point for rightward, flat approach
+        const midX = Math.max(x1, x2) + 40;
+        const midY = y2;
+        const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        arrow.setAttribute('d', `M${x1},${y1} Q${midX},${midY} ${x2},${y2}`);
+        arrow.setAttribute('stroke', '#111');
+        arrow.setAttribute('stroke-width', '2.5');
+        arrow.setAttribute('fill', 'none');
+        arrow.setAttribute('marker-end', 'url(#arrowhead)');
+        svg.appendChild(arrow);
+      });
+      // Arrowhead marker
+      const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+      const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+      marker.setAttribute('id', 'arrowhead');
+      marker.setAttribute('markerWidth', '8');
+      marker.setAttribute('markerHeight', '8');
+      marker.setAttribute('refX', '0');
+      marker.setAttribute('refY', '4');
+      marker.setAttribute('orient', 'auto-start-reverse');
+      const arrowHead = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      arrowHead.setAttribute('points', '8,0 0,4 8,8');
+      arrowHead.setAttribute('fill', '#111');
+      marker.appendChild(arrowHead);
+      defs.appendChild(marker);
+      svg.appendChild(defs);
+      tree.appendChild(svg);
     }
 
     // --- ELIZA Chat Bubble Logic ---
@@ -128,7 +206,7 @@
       const bubble = document.createElement('div');
       bubble.className = 'chat-bubble ' + (sender === 'eliza' ? 'eliza-bubble' : 'user-bubble');
       if (sender === 'eliza') {
-        bubble.innerHTML = `<span class="eliza-avatar">🧑‍⚕️</span><span class="bubble-text">${text}</span>`;
+        bubble.innerHTML = `<img src="eliza.png" alt="ELIZA" class="eliza-avatar"><span class="bubble-text">${text}</span>`;
       } else {
         bubble.innerHTML = `<span class="bubble-text">${text}</span>`;
       }
@@ -143,10 +221,45 @@
       if (!input) return false;
       addChatBubble(input, 'user');
       inputBox.value = '';
-      const match = window.elizaMatchPath(input);
+      let match = window.elizaMatchPath(input);
       let response = '';
+      let originalKeyword = match && match[0];
+      // Follow gotos for highlighting and response
+      function followGoto(match) {
+        if (match && match[2] && typeof match[2] === 'string' && match[2].startsWith('goto ')) {
+          const gotoKey = match[2].slice(5).trim();
+          // Find the goto target match
+          const gotoMatch = window.elizaMatchPath('goto:' + gotoKey);
+          if (gotoMatch) return followGoto(gotoMatch);
+        }
+        return match;
+      }
+      match = followGoto(match);
       if (match) {
         elizaTreeState.expanded = { 'ELIZA': true };
+        // Expand both the original and the goto target keyword
+        if (originalKeyword) {
+          elizaTreeState.expanded[originalKeyword] = true;
+          // Expand all children of the original keyword
+          const tree = window.buildElizaRuleTree();
+          function findNodeByName(node, name) {
+            if (node.name === name) return node;
+            if (node.children) {
+              for (const child of node.children) {
+                const found = findNodeByName(child, name);
+                if (found) return found;
+              }
+            }
+            return null;
+          }
+          const origNode = findNodeByName(tree, originalKeyword);
+          if (origNode && origNode.children) {
+            for (const child of origNode.children) {
+              elizaTreeState.expanded[child.name] = true;
+            }
+          }
+        }
+        if (match[0]) elizaTreeState.expanded[match[0]] = true;
         for (const name of match) {
           elizaTreeState.expanded[name] = true;
         }
