@@ -587,10 +587,10 @@ li.has-children:hover::before {
 } 
 
 #eliza-tree li:hover {
-  background: #f5e9ff;
+  background: #e0e0e0;
   border-radius: 6px;
   transition: background 0.18s;
-  box-shadow: 0 2px 8px #b39ddb44;
+  box-shadow: 0 2px 8px #bdbdbd44;
   cursor: pointer;
 }
 
