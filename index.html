@@ -6,6 +6,7 @@
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.18.0/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis"></script>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
   <script src="lstm.js"></script>
 </head>
 <body>
@@ -21,8 +22,9 @@
       </select>
     </div>
   </div>
+  
   <div id="markov-container" style="display: none;">
-    <h2>Markov Chain Visualizer</h2>
+    <h2>Markov Chain</h2>
     <form id="markov-form" autocomplete="off" onsubmit="return false;">
       <textarea id="inputText" rows="6" cols="60" placeholder="Paste your training text here..."></textarea>
       <div class="markov-row single">
@@ -51,6 +53,7 @@
     </form>
     <canvas id="graphCanvas" style="display:block; margin-top:2em; background:#fff; border:1px solid #eee;"></canvas>
   </div>
+  
   <div id="eliza-container" style="display: block;">
     <h2>ELIZA</h2>
     <div id="eliza-chat-area">
@@ -63,9 +66,10 @@
     <div id="eliza-match-path"></div>
     <div id="eliza-tree" style="display:block;"></div>
   </div>
-  <div id="lstm-container" style="display: none; margin-top:2em;">
-    <h2>LSTM Demo</h2>
-    <div id="lstm-train-section" style="margin-bottom:2em;">
+  
+  <div id="lstm-container" style="display: none;">
+    <h2>LSTM</h2>
+    <div id="lstm-train-section">
       <h3>Train LSTM Model</h3>
       <textarea id="lstm-train-text" rows="6" cols="60" placeholder="Paste training text here... (or use sample)"></textarea>
       <button id="lstm-sample-btn" type="button" style="margin-left:0.5em;">Use Sample Text</button>
@@ -77,17 +81,10 @@
       <button id="lstm-train-btn">Train LSTM</button>
       <div id="lstm-train-status" style="margin-top:0.5em;"></div>
     </div>
-    <div id="lstm-generate-section" style="margin-bottom:2em;">
-      <h3>Generate Text</h3>
-      <input id="lstm-seed" type="text" placeholder="Seed text for generation..." style="width:300px;" />
-      <label>Length: <input type="number" id="lstm-gen-length" value="200" min="10" max="1000"></label>
-      <label>Temperature: <input type="number" id="lstm-temp" value="0.5" min="0.1" max="2" step="0.1"></label>
-      <button id="lstm-generate-btn">Generate</button>
-      <div id="lstm-gen-output" style="margin-top:1em; white-space:pre-wrap;"></div>
-    </div>
     <div id="lstm-chat" style="margin-top:1em;"></div>
     <div id="lstm-vis" style="margin-top:2em;"></div>
   </div>
+  
   <script src="markov.js"></script>
   <script src="elizabot.js"></script>
   <script src="eliza.js"></script>
@@ -97,6 +94,7 @@
     const markovContainer = document.getElementById('markov-container');
     const elizaContainer = document.getElementById('eliza-container');
     const lstmContainer = document.getElementById('lstm-container');
+    
     modelPicker.addEventListener('change', function() {
       if (this.value === 'eliza') {
         markovContainer.style.display = 'none';
@@ -112,6 +110,7 @@
         lstmContainer.style.display = 'block';
       }
     });
+    
     // Ensure correct container is shown on load
     window.addEventListener('DOMContentLoaded', function() {
       modelPicker.dispatchEvent(new Event('change'));
@@ -379,12 +378,13 @@
       document.getElementById('lstmInput').value = '';
     };
   </script>
+  
   <!-- Reusable Popup Alert -->
   <div id="popup-alert" class="popup-alert" style="display:none;">
     <span class="popup-close" onclick="document.getElementById('popup-alert').style.display='none';">&times;</span>
     <span id="popup-alert-message"></span>
   </div>
-  <div id="eliza-tree"></div>
+  
   <style>
     #eliza-tree ul, #eliza-tree li {
       list-style-type: none;
