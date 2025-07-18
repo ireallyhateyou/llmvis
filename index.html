@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <title>LLMVis</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.18.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis"></script>
+  <script src="lstm.js"></script>
 </head>
 <body>
   <h1>LLMVis</h1>
@@ -14,6 +17,7 @@
       <select id="model-picker">
         <option value="eliza" selected>ELIZA</option>
         <option value="markov">Markov Chain</option>
+        <option value="lstm">LSTM</option>
       </select>
     </div>
   </div>
@@ -59,6 +63,31 @@
     <div id="eliza-match-path"></div>
     <div id="eliza-tree" style="display:block;"></div>
   </div>
+  <div id="lstm-container" style="display: none; margin-top:2em;">
+    <h2>LSTM Demo</h2>
+    <div id="lstm-train-section" style="margin-bottom:2em;">
+      <h3>Train LSTM Model</h3>
+      <textarea id="lstm-train-text" rows="6" cols="60" placeholder="Paste training text here... (or use sample)"></textarea>
+      <button id="lstm-sample-btn" type="button" style="margin-left:0.5em;">Use Sample Text</button>
+      <div style="margin:0.5em 0;">
+        <label>Sequence Length: <input type="number" id="lstm-seq-length" value="40" min="5" max="100"></label>
+        <label>Epochs: <input type="number" id="lstm-epochs" value="10" min="1" max="100"></label>
+        <label>Batch Size: <input type="number" id="lstm-batch-size" value="64" min="1" max="512"></label>
+      </div>
+      <button id="lstm-train-btn">Train LSTM</button>
+      <div id="lstm-train-status" style="margin-top:0.5em;"></div>
+    </div>
+    <div id="lstm-generate-section" style="margin-bottom:2em;">
+      <h3>Generate Text</h3>
+      <input id="lstm-seed" type="text" placeholder="Seed text for generation..." style="width:300px;" />
+      <label>Length: <input type="number" id="lstm-gen-length" value="200" min="10" max="1000"></label>
+      <label>Temperature: <input type="number" id="lstm-temp" value="0.5" min="0.1" max="2" step="0.1"></label>
+      <button id="lstm-generate-btn">Generate</button>
+      <div id="lstm-gen-output" style="margin-top:1em; white-space:pre-wrap;"></div>
+    </div>
+    <div id="lstm-chat" style="margin-top:1em;"></div>
+    <div id="lstm-vis" style="margin-top:2em;"></div>
+  </div>
   <script src="markov.js"></script>
   <script src="elizabot.js"></script>
   <script src="eliza.js"></script>
@@ -67,13 +96,20 @@
     const modelPicker = document.getElementById('model-picker');
     const markovContainer = document.getElementById('markov-container');
     const elizaContainer = document.getElementById('eliza-container');
+    const lstmContainer = document.getElementById('lstm-container');
     modelPicker.addEventListener('change', function() {
       if (this.value === 'eliza') {
         markovContainer.style.display = 'none';
         elizaContainer.style.display = 'block';
-      } else {
+        lstmContainer.style.display = 'none';
+      } else if (this.value === 'markov') {
         markovContainer.style.display = 'block';
         elizaContainer.style.display = 'none';
+        lstmContainer.style.display = 'none';
+      } else if (this.value === 'lstm') {
+        markovContainer.style.display = 'none';
+        elizaContainer.style.display = 'none';
+        lstmContainer.style.display = 'block';
       }
     });
     // Ensure correct container is shown on load
@@ -99,6 +135,8 @@
         const expanded = elizaTreeState.expanded[node.name] || isRoot;
         const highlight = matchedPath && matchedPath.includes(node.name);
         const isGoto = node.name && node.name.startsWith('goto ');
+        // Highlight the specific reasmb used
+        const isReasmbMatch = node.type === 'reasmb' && matchedPath && node.name === matchedPath[3];
         const li = document.createElement('li');
         if (node.type === 'keyword') {
           li.setAttribute('data-eliza-keyword', node.name);
@@ -110,7 +148,7 @@
           li.innerHTML = `<span class="eliza-goto-arrow">↪</span> goto <b>${target}</b>`;
         } else {
           li.textContent = node.name;
-          li.className = node.type + (highlight ? ' eliza-highlight' : '');
+          li.className = node.type + (highlight ? ' eliza-highlight' : '') + (isReasmbMatch ? ' eliza-reasmb-highlight' : '');
         }
         if (!expanded) li.classList.add('eliza-collapsible');
         li.onclick = (e) => {
@@ -178,6 +216,53 @@
         arrow.setAttribute('fill', 'none');
         svg.appendChild(arrow);
       });
+      // Custom: if last input was 'i apologize', draw a line from 'goto sorry' to '* sorry *'
+      if (window.lastElizaInput && window.lastElizaInput.trim().toLowerCase() === 'i apologize') {
+        // Find the 'goto sorry' reasmb node under 'apologize'
+        const gotoSorryNode = Array.from(tree.querySelectorAll('li.reasmb')).find(li => li.textContent.trim() === 'goto sorry');
+        // Find the '* sorry *' decomp node under 'sorry'
+        const sorryDecompNode = Array.from(tree.querySelectorAll('li.decomp')).find(li => li.textContent.trim() === '* sorry *');
+        if (gotoSorryNode && sorryDecompNode) {
+          const gotoRect = gotoSorryNode.getBoundingClientRect();
+          const targetRect = sorryDecompNode.getBoundingClientRect();
+          const treeRect = tree.getBoundingClientRect();
+          const y1 = gotoRect.top + gotoRect.height/2 - treeRect.top;
+          const y2 = targetRect.top + targetRect.height/2 - treeRect.top;
+          const x1 = gotoRect.right - treeRect.left + 5;
+          const x2 = targetRect.left - treeRect.left - 5;
+          // Use cubic Bezier for a smoother arc
+          const dx = x2 - x1;
+          const dy = y2 - y1;
+          const c1x = x1 + dx * 0.33;
+          const c1y = y1 - 40;
+          const c2x = x1 + dx * 0.66;
+          const c2y = y2 - 40;
+          const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          arrow.setAttribute('d', `M${x1},${y1} C${c1x},${c1y} ${c2x},${c2y} ${x2},${y2}`);
+          arrow.setAttribute('stroke', '#ff9800');
+          arrow.setAttribute('stroke-width', '2.5');
+          arrow.setAttribute('fill', 'none');
+          arrow.setAttribute('marker-end', 'url(#arrowhead)');
+          svg.appendChild(arrow);
+          // Add arrowhead marker
+          if (!svg.querySelector('marker#arrowhead')) {
+            const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+            marker.setAttribute('id', 'arrowhead');
+            marker.setAttribute('markerWidth', '8');
+            marker.setAttribute('markerHeight', '8');
+            marker.setAttribute('refX', '6');
+            marker.setAttribute('refY', '3');
+            marker.setAttribute('orient', 'auto');
+            marker.setAttribute('markerUnits', 'strokeWidth');
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', 'M0,0 L0,6 L8,3 z');
+            path.setAttribute('fill', '#ff9800');
+            marker.appendChild(path);
+            svg.appendChild(marker);
+          }
+        }
+      }
+      tree.appendChild(svg);
     }
 
     // --- ELIZA Chat Bubble Logic ---
@@ -188,7 +273,7 @@
       const bubble = document.createElement('div');
       bubble.className = 'chat-bubble ' + (sender === 'eliza' ? 'eliza-bubble' : 'user-bubble');
       if (sender === 'eliza') {
-        bubble.innerHTML = `<img src="eliza.png" alt="ELIZA" class="eliza-avatar"><span class="bubble-text">${text}</span>`;
+        bubble.innerHTML = `<span class="bubble-text">${text}</span>`;
       } else {
         bubble.innerHTML = `<span class="bubble-text">${text}</span>`;
       }
@@ -201,6 +286,7 @@
     inputForm.onsubmit = function() {
       const input = inputBox.value.trim();
       if (!input) return false;
+      window.lastElizaInput = input;
       addChatBubble(input, 'user');
       inputBox.value = '';
       let match = window.elizaMatchPath(input);
@@ -257,6 +343,51 @@
     };
     // Initial render
     renderElizaTree();
+
+    // LSTM chat logic
+    window.sendLSTMMessage = async function() {
+      const input = document.getElementById('lstmInput').value;
+      const chat = document.getElementById('lstm-chat');
+      const vis = document.getElementById('lstm-vis');
+      if (!input) return;
+      const response = await runLSTM(input, vis);
+      chat.innerHTML += `<div><b>You:</b> ${input}</div>`;
+      chat.innerHTML += `<div><b>LSTM:</b> ${response}</div>`;
+      document.getElementById('lstmInput').value = '';
+    };
   </script>
+  <!-- Reusable Popup Alert -->
+  <div id="popup-alert" class="popup-alert" style="display:none;">
+    <span class="popup-close" onclick="document.getElementById('popup-alert').style.display='none';">&times;</span>
+    <span id="popup-alert-message"></span>
+  </div>
+  <div id="eliza-tree"></div>
+  <style>
+    #eliza-tree ul, #eliza-tree li {
+      list-style-type: none;
+      margin: 0;
+      padding: 0;
+    }
+    #eliza-tree ul { margin-left: 1.5em; padding-left: 0.5em; border-left: none; }
+    li.keyword {
+      font-weight: bold;
+      color: #111;
+      margin-top: 0.7em;
+      margin-bottom: 0.2em;
+    }
+    li.decomp {
+      font-style: italic;
+      color: #333;
+      margin-left: 1.2em;
+      margin-top: 0.1em;
+      margin-bottom: 0.1em;
+    }
+    li.reasmb {
+      color: #111;
+      margin-left: 2.2em;
+      margin-top: 0.1em;
+      margin-bottom: 0.1em;
+    }
+  </style>
 </body>
 </html> 

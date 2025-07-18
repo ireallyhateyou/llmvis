@@ -1,9 +1,18 @@
 // eliza.js - ELIZA rule parser and visualizer logic
 // Assumes elizabot.js is loaded and ElizaBot is available
 
+console.log('TOP OF eliza.js');
+window.onerror = function(msg, url, line, col, error) {
+  console.error('GLOBAL ERROR:', msg, url, line, col, error);
+};
+
+console.log('eliza.js script start');
 // Build a tree structure from ELIZA rules for visualization
 function buildElizaRuleTree() {
-  // Tree: root -> keywords -> decomps -> reassemblies
+  if (typeof window.elizaKeywords === 'undefined') {
+    console.error('elizaKeywords is not defined!');
+    return { name: 'ELIZA', children: [] };
+  }
   const tree = { name: 'ELIZA', children: [] };
   for (const keyword of elizaKeywords) {
     const [key, rank, decomps] = keyword;
@@ -120,5 +129,25 @@ function elizaSubstitute(response, bindings, starGroups) {
 }
 
 // Export for use in visualizer
-window.buildElizaRuleTree = buildElizaRuleTree;
+window.buildElizaRuleTree = function() {
+  if (typeof window.elizaKeywords === 'undefined') {
+    console.error('elizaKeywords is not defined!');
+    return { name: 'ELIZA', children: [] };
+  }
+  const tree = { name: 'ELIZA', children: [] };
+  for (const keyword of elizaKeywords) {
+    const [key, rank, decomps] = keyword;
+    const keyNode = { name: key, type: 'keyword', children: [] };
+    for (const decomp of decomps) {
+      const [pattern, reasmbs] = decomp;
+      const decompNode = { name: pattern, type: 'decomp', children: [] };
+      for (const reasmb of reasmbs) {
+        decompNode.children.push({ name: reasmb, type: 'reasmb' });
+      }
+      keyNode.children.push(decompNode);
+    }
+    tree.children.push(keyNode);
+  }
+  return tree;
+};
 window.elizaMatchPath = elizaMatchPath; 
