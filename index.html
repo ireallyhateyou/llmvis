@@ -8,6 +8,40 @@
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis"></script>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <script src="lstm.js"></script>
+  <script>
+    // Configure TensorFlow.js to handle WASM loading issues
+    window.addEventListener('load', async function() {
+      try {
+        // Set TensorFlow.js to use CPU backend by default to avoid WASM issues
+        await tf.setBackend('cpu');
+        console.log('TensorFlow.js backend set to:', tf.getBackend());
+        
+        // Enable production mode for better performance
+        tf.enableProdMode();
+        
+        // Add error handling for WASM loading
+        if (tf.getBackend() === 'wasm') {
+          console.log('WASM backend detected, configuring...');
+          // Force CPU backend if WASM fails
+          try {
+            await tf.setBackend('cpu');
+            console.log('Falling back to CPU backend');
+          } catch (e) {
+            console.error('Failed to set CPU backend:', e);
+          }
+        }
+      } catch (error) {
+        console.error('TensorFlow.js initialization error:', error);
+        // Force CPU backend on error
+        try {
+          await tf.setBackend('cpu');
+          console.log('Forced CPU backend due to initialization error');
+        } catch (e) {
+          console.error('Failed to set CPU backend:', e);
+        }
+      }
+    });
+  </script>
 </head>
 <body>
   <div id="hero-section">
@@ -113,30 +147,31 @@ and so should you!</textarea>
 
   <div id="slm-container" style="display: none;">
     <h2>Small Language Model (SLM)</h2>
+    
+    <label for="slm-train-text">Training Text:</label>
+    <textarea id="slm-train-text" placeholder="Enter training text...">Roses are red,
+Violets are blue,
+I love Hack Club
+and so should you!</textarea>
+    
     <div class="slm-controls">
       <div class="control-group">
-        <label for="slm-train-text">Training Text:</label>
-        <textarea id="slm-train-text" placeholder="Enter text to train the SLM...">Roses are red, Violets are blue, I love Hack Club and so should you! This is a simple test for our small language model. We will train it on this text and see how it learns patterns.</textarea>
+        <label for="slm-epochs">Epochs:</label>
+        <input type="number" id="slm-epochs" value="20" min="1" max="100">
       </div>
-      <div class="slm-params">
-        <div class="control-group">
-          <label for="slm-epochs">Epochs:</label>
-          <input type="number" id="slm-epochs" value="10" min="1" max="50">
-        </div>
-        <div class="control-group">
-          <label for="slm-layers">Layers:</label>
-          <input type="number" id="slm-layers" value="4" min="1" max="8">
-        </div>
-        <div class="control-group">
-          <label for="slm-embedding">Embedding Dim:</label>
-          <input type="number" id="slm-embedding" value="128" min="32" max="512">
-        </div>
+      <div class="control-group">
+        <label for="slm-batch-size">Batch Size:</label>
+        <input type="number" id="slm-batch-size" value="8" min="4" max="32">
       </div>
-      <button id="slm-train-btn" class="train-btn">Train SLM</button>
-      <button id="slm-generate-btn" class="generate-btn" disabled>Generate Text</button>
-      <div id="slm-train-status" class="train-status">Ready to train</div>
+      <div class="control-group">
+        <label for="slm-seq-length">Sequence Length:</label>
+        <input type="number" id="slm-seq-length" value="10" min="5" max="50">
+      </div>
     </div>
-    <div id="slm-vis" class="training-viz-container"></div>
+    
+    <button onclick="trainSLM()">Train Model</button>
+    <div id="slm-status"></div>
+    <div id="slm-vis"></div>
   </div>
   
   <script src="markov.js"></script>
