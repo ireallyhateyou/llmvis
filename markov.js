@@ -412,14 +412,14 @@ function renderMarkovGraph(markov, highlightNgrams = new Set(), path = []) {
   if (window.DEBUG_MARKOV_CANVAS) {
     ctx.beginPath();
     ctx.arc(100, 100, 40, 0, 2 * Math.PI);
-    ctx.fillStyle = 'red';
+    ctx.fillStyle = '#000000';
     ctx.fill();
     ctx.beginPath();
     ctx.arc(300, 200, 60, 0, 2 * Math.PI);
-    ctx.fillStyle = 'blue';
+    ctx.fillStyle = '#888888';
     ctx.fill();
     ctx.font = '32px sans-serif';
-    ctx.fillStyle = 'black';
+    ctx.fillStyle = '#000000';
     ctx.fillText('Canvas works!', 400, 100);
     return;
   }
@@ -459,7 +459,7 @@ function renderMarkovGraph(markov, highlightNgrams = new Set(), path = []) {
 
   if (nodes.length === 0) {
     ctx.font = '20px sans-serif';
-    ctx.fillStyle = '#888';
+    ctx.fillStyle = '#888888';
     ctx.fillText('No Markov states to display.', 40, 60);
     return;
   }
@@ -584,7 +584,7 @@ function renderMarkovGraph(markov, highlightNgrams = new Set(), path = []) {
       ctx.beginPath();
       ctx.moveTo(source.x, source.y);
       ctx.lineTo(target.x, target.y);
-      ctx.strokeStyle = pathEdges.has((source.id || source.index) + '->' + (target.id || target.index)) ? '#e74c3c' : '#aaa';
+      ctx.strokeStyle = pathEdges.has((source.id || source.index) + '->' + (target.id || target.index)) ? '#000000' : '#888888';
       ctx.lineWidth = Math.max(2, 6 * l.prob);
       ctx.globalAlpha = 0.7;
       ctx.stroke();
@@ -593,10 +593,10 @@ function renderMarkovGraph(markov, highlightNgrams = new Set(), path = []) {
       const mx = (source.x + target.x) / 2;
       const my = (source.y + target.y) / 2;
       ctx.font = '12px sans-serif';
-      ctx.strokeStyle = '#fff';
+      ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 4;
       ctx.strokeText((l.prob * 100).toFixed(0) + '%', mx, my - 8);
-      ctx.fillStyle = '#333';
+      ctx.fillStyle = '#000000';
       ctx.fillText((l.prob * 100).toFixed(0) + '%', mx, my - 8);
     });
     ctx.restore();
@@ -606,24 +606,29 @@ function renderMarkovGraph(markov, highlightNgrams = new Set(), path = []) {
       ctx.beginPath();
       ctx.arc(n.x, n.y, nodeRadius(n.id), 0, 2 * Math.PI);
       if (pathNodes.has(n.id)) {
-        ctx.fillStyle = '#e74c3c';
+        ctx.fillStyle = '#000000';
       } else if (highlightNgrams.has(n.id)) {
-        ctx.shadowColor = '#ffd700';
+        ctx.shadowColor = '#ffffff';
         ctx.shadowBlur = 24;
-        ctx.fillStyle = '#ffd700';
+        ctx.fillStyle = '#ffffff';
       } else {
-        ctx.fillStyle = '#69b3a2';
+        ctx.fillStyle = '#cccccc';
       }
       ctx.fill();
       ctx.lineWidth = 2;
-      ctx.strokeStyle = '#fff';
+      ctx.strokeStyle = '#000000';
       ctx.stroke();
       ctx.restore();
       // Node label
       ctx.font = '14px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#222';
+      // Ensure text is always readable
+      if (pathNodes.has(n.id)) {
+        ctx.fillStyle = '#ffffff'; // White text on black nodes
+      } else {
+        ctx.fillStyle = '#000000'; // Black text on light nodes
+      }
       ctx.fillText(n.id, n.x, n.y);
     });
     ctx.restore();

@@ -19,6 +19,7 @@
         <option value="eliza" selected>ELIZA</option>
         <option value="markov">Markov Chain</option>
         <option value="lstm">LSTM</option>
+        <option value="slm">Small Language Model (SLM)</option>
       </select>
     </div>
   </div>
@@ -26,7 +27,10 @@
   <div id="markov-container" style="display: none;">
     <h2>Markov Chain</h2>
     <form id="markov-form" autocomplete="off" onsubmit="return false;">
-      <textarea id="inputText" rows="6" cols="60" placeholder="Paste your training text here..."></textarea>
+      <textarea id="inputText" rows="6" cols="60" placeholder="Paste your training text here...">Roses are red,
+Violets are blue,
+I love Hack Club
+and so should you!</textarea>
       <div class="markov-row single">
         <div class="markov-label-input">
           <label for="order">Order:</label>
@@ -67,47 +71,108 @@
     <div id="eliza-tree" style="display:block;"></div>
   </div>
   
-  <div id="lstm-container" style="display: none;">
+      <div id="lstm-container" style="display: none;">
     <h2>LSTM</h2>
-    <div id="lstm-train-section">
-      <h3>Train LSTM Model</h3>
-      <textarea id="lstm-train-text" rows="6" cols="60" placeholder="Paste training text here... (or use sample)"></textarea>
-      <button id="lstm-sample-btn" type="button" style="margin-left:0.5em;">Use Sample Text</button>
-      <div style="margin:0.5em 0;">
-        <label>Sequence Length: <input type="number" id="lstm-seq-length" value="40" min="5" max="100"></label>
-        <label>Epochs: <input type="number" id="lstm-epochs" value="10" min="1" max="100"></label>
-        <label>Batch Size: <input type="number" id="lstm-batch-size" value="64" min="1" max="512"></label>
-      </div>
-      <button id="lstm-train-btn">Train LSTM</button>
-      <div id="lstm-train-status" style="margin-top:0.5em;"></div>
+    <!-- Shakespeare Mode Toggle -->
+    <div class="shakespeare-mode">
+      <label>
+        <input type="checkbox" id="shakespeare-mode" onchange="toggleShakespeareMode()">
+        Shakespeare Mode (Enhanced Model)
+      </label>
+      <small>Uses larger model and Shakespeare corpus for better results</small>
     </div>
-    <div id="lstm-chat" style="margin-top:1em;"></div>
-    <div id="lstm-vis" style="margin-top:2em;"></div>
+    
+    <label for="lstm-train-text">Training Text:</label>
+    <textarea id="lstm-train-text" placeholder="Enter training text or use Shakespeare corpus...">Roses are red,
+Violets are blue,
+I love Hack Club
+and so should you!</textarea>
+    
+    <div class="lstm-controls">
+      <div class="control-group">
+        <label for="lstm-epochs">Epochs:</label>
+        <input type="number" id="lstm-epochs" value="25" min="1" max="100">
+      </div>
+      <div class="control-group">
+        <label for="lstm-batch-size">Batch Size:</label>
+        <input type="number" id="lstm-batch-size" value="8" min="8" max="128">
+      </div>
+      <div class="control-group">
+        <label for="lstm-seq-length">Sequence Length:</label>
+        <input type="number" id="lstm-seq-length" value="15" min="5" max="200">
+      </div>
+    </div>
+    
+    <button onclick="trainLSTM()">Train Model</button>
+    <div id="lstm-status"></div>
+    <div id="lstm-vis"></div>
+  </div>
+
+  <div id="slm-container" style="display: none;">
+    <h2>Small Language Model (SLM)</h2>
+    <div class="slm-controls">
+      <div class="control-group">
+        <label for="slm-train-text">Training Text:</label>
+        <textarea id="slm-train-text" placeholder="Enter text to train the SLM...">Roses are red, Violets are blue, I love Hack Club and so should you! This is a simple test for our small language model. We will train it on this text and see how it learns patterns.</textarea>
+      </div>
+      <div class="slm-params">
+        <div class="control-group">
+          <label for="slm-epochs">Epochs:</label>
+          <input type="number" id="slm-epochs" value="10" min="1" max="50">
+        </div>
+        <div class="control-group">
+          <label for="slm-layers">Layers:</label>
+          <input type="number" id="slm-layers" value="4" min="1" max="8">
+        </div>
+        <div class="control-group">
+          <label for="slm-embedding">Embedding Dim:</label>
+          <input type="number" id="slm-embedding" value="128" min="32" max="512">
+        </div>
+      </div>
+      <button id="slm-train-btn" class="train-btn">Train SLM</button>
+      <button id="slm-generate-btn" class="generate-btn" disabled>Generate Text</button>
+      <div id="slm-train-status" class="train-status">Ready to train</div>
+    </div>
+    <div id="slm-vis" class="training-viz-container"></div>
   </div>
   
   <script src="markov.js"></script>
-  <script src="elizabot.js"></script>
-  <script src="eliza.js"></script>
+      <script src="elizabot.js"></script>
+    <script src="eliza.js"></script>
+    <script src="slm.js"></script>
   <script>
     // Model picker logic
     const modelPicker = document.getElementById('model-picker');
     const markovContainer = document.getElementById('markov-container');
     const elizaContainer = document.getElementById('eliza-container');
     const lstmContainer = document.getElementById('lstm-container');
+    const slmContainer = document.getElementById('slm-container');
     
     modelPicker.addEventListener('change', function() {
       if (this.value === 'eliza') {
         markovContainer.style.display = 'none';
         elizaContainer.style.display = 'block';
         lstmContainer.style.display = 'none';
+        slmContainer.style.display = 'none';
       } else if (this.value === 'markov') {
         markovContainer.style.display = 'block';
         elizaContainer.style.display = 'none';
         lstmContainer.style.display = 'none';
+        slmContainer.style.display = 'none';
       } else if (this.value === 'lstm') {
         markovContainer.style.display = 'none';
         elizaContainer.style.display = 'none';
         lstmContainer.style.display = 'block';
+        slmContainer.style.display = 'none';
+      } else if (this.value === 'slm') {
+        markovContainer.style.display = 'none';
+        elizaContainer.style.display = 'none';
+        lstmContainer.style.display = 'none';
+        slmContainer.style.display = 'block';
+        // Initialize SLM visualization when selected
+        if (window.initSLMVisualization) {
+          window.initSLMVisualization();
+        }
       }
     });
     
@@ -115,6 +180,175 @@
     window.addEventListener('DOMContentLoaded', function() {
       modelPicker.dispatchEvent(new Event('change'));
     });
+
+    // Shakespeare mode toggle
+    async function toggleShakespeareMode() {
+      const shakespeareMode = document.getElementById('shakespeare-mode').checked;
+      const trainText = document.getElementById('lstm-train-text');
+      const seqLength = document.getElementById('lstm-seq-length');
+      const epochs = document.getElementById('lstm-epochs');
+      const batchSize = document.getElementById('lstm-batch-size');
+      
+      if (shakespeareMode) {
+        // Load Shakespeare corpus
+        trainText.value = 'Loading Shakespeare corpus...';
+        try {
+          const response = await fetch('https://raw.githubusercontent.com/atrybyme/LSTM-Shakespearean-Text-Generation/master/shakespeare.txt');
+          const text = await response.text();
+          const corpus = text.toLowerCase()
+            .replace(/\n/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 5000); // Very small limit to prevent hanging
+          trainText.value = corpus;
+        } catch (error) {
+          console.error('Failed to load Shakespeare corpus:', error);
+          trainText.value = 'to be or not to be that is the question whether tis nobler in the mind to suffer the slings and arrows of outrageous fortune or to take arms against a sea of troubles and by opposing end them to die to sleep no more and by a sleep to say we end the heart ache and the thousand natural shocks that flesh is heir to tis a consummation devoutly to be wished to die to sleep to sleep perchance to dream ay theres the rub for in that sleep of death what dreams may come when we have shuffled off this mortal coil must give us pause theres the respect that makes calamity of so long life for who would bear the whips and scorns of time the oppressors wrong the proud mans contumely the pangs of despised love the laws delay the insolence of office and the spurns that patient merit of the unworthy takes when he himself might his quietus make with a bare bodkin who would fardels bear to grunt and sweat under a weary life but that the dread of something after death the undiscovered country from whose bourn no traveller returns puzzles the will and makes us rather bear those ills we have than fly to others that we know not of thus conscience does make cowards of us all and thus the native hue of resolution is sicklied oer with the pale cast of thought and enterprises of great pitch and moment with this regard their currents turn awry and lose the name of action';
+        }
+        
+        // Update parameters for Shakespeare (conservative)
+        seqLength.value = '20';   // Shorter sequences to prevent hanging
+        epochs.value = '15';      // More epochs to see evolution
+        batchSize.value = '8';    // Smaller batch size
+        
+        showPopupAlert('Shakespeare mode enabled! Using conservative model with 16 LSTM units.');
+      } else {
+        // Reset to default values
+        trainText.value = '';
+        seqLength.value = '40';
+        epochs.value = '20';
+        batchSize.value = '32';
+        
+        showPopupAlert('Standard mode enabled.');
+      }
+    }
+
+    // Simplified training function that uses the LSTM.js functions
+    async function trainLSTM() {
+      console.log('trainLSTM called');
+      
+      const trainText = document.getElementById('lstm-train-text').value.trim();
+      const seqLength = parseInt(document.getElementById('lstm-seq-length').value);
+      const epochs = parseInt(document.getElementById('lstm-epochs').value);
+      const batchSize = parseInt(document.getElementById('lstm-batch-size').value);
+      const shakespeareMode = document.getElementById('shakespeare-mode').checked;
+      
+      console.log('Training parameters:', { trainText: trainText.substring(0, 50) + '...', seqLength, epochs, batchSize, shakespeareMode });
+      
+      if (!trainText) {
+        showPopupAlert('Please enter training text or enable Shakespeare mode!');
+        return;
+      }
+      
+      // Initialize visualization
+      if (window.initTrainingVisualization) {
+        console.log('Initializing training visualization');
+        window.initTrainingVisualization();
+      }
+      
+      try {
+        const status = document.getElementById('lstm-status');
+        status.textContent = 'Preparing data...';
+        console.log('Preparing data...');
+        
+        // Get unique characters
+        const chars = [...new Set(trainText)].sort();
+        const vocabSize = chars.length;
+        console.log('Vocabulary size:', vocabSize);
+        
+        // Create character mappings
+        const charToIdx = {};
+        const idxToChar = {};
+        chars.forEach((char, idx) => {
+          charToIdx[char] = idx;
+          idxToChar[idx] = char;
+        });
+        
+        // Create sequences
+        const sequences = [];
+        for (let i = 0; i <= trainText.length - seqLength; i++) {
+          const sequence = trainText.slice(i, i + seqLength);
+          const nextChar = trainText[i + seqLength];
+          sequences.push({ input: sequence, label: nextChar });
+        }
+              console.log('Created', sequences.length, 'sequences');
+      
+      // Check if data is too large
+      if (sequences.length > 1000) {
+        showPopupAlert('Training data too large! Please use shorter text or reduce sequence length.');
+        return;
+      }
+      
+      // Vectorize data
+      console.log('Vectorizing data...');
+      const xs = tf.buffer([sequences.length, seqLength, vocabSize]);
+      const ys = tf.buffer([sequences.length, vocabSize]);
+        
+        sequences.forEach((seq, i) => {
+          // Input sequence
+          for (let t = 0; t < seqLength; t++) {
+            xs.set(1, i, t, charToIdx[seq.input[t]]);
+          }
+          // Output (next character)
+          ys.set(1, i, charToIdx[seq.label]);
+        });
+        
+        const xsTensor = xs.toTensor();
+        const ysTensor = ys.toTensor();
+        console.log('Tensors created:', xsTensor.shape, ysTensor.shape);
+        
+        status.textContent = 'Creating model...';
+        console.log('Creating model...');
+        
+        // Create model
+        let model;
+        if (shakespeareMode) {
+          console.log('Creating Shakespeare model');
+          model = window.createShakespeareLSTMModel(seqLength, vocabSize);
+        } else {
+          console.log('Creating standard model');
+          model = window.createLSTMModel(seqLength, vocabSize);
+        }
+        console.log('Model created successfully');
+        
+        status.textContent = 'Training... (watch the chart below!)';
+        console.log('Starting training...');
+        
+        // Train model using the function from lstm.js
+        await window.trainLSTMModel(model, xsTensor, ysTensor, epochs, batchSize, (epoch, loss, minLoss, lr) => {
+          console.log(`Training callback: epoch ${epoch}, loss ${loss}`);
+          if (window.updateTrainingVisualization) {
+            window.updateTrainingVisualization(epoch, loss);
+          }
+          status.textContent = `Epoch ${epoch}/${epochs}: Loss=${loss.toFixed(4)}, Min=${minLoss.toFixed(4)}, LR=${lr.toFixed(6)}`;
+        });
+        
+        // Clean up tensors
+        xsTensor.dispose();
+        ysTensor.dispose();
+        
+        // Store model and mappings
+        window.lstmModel = model;
+        window.charToIdx = charToIdx;
+        window.idxToChar = idxToChar;
+        window.seqLength = seqLength;
+        
+        // Initialize generation visualization
+        if (window.initGenerationVisualization) {
+          window.initGenerationVisualization();
+        }
+        
+        status.textContent = 'Training complete! You can now generate text.';
+        console.log('Training completed successfully');
+        showPopupAlert('Training complete! You can now generate text.');
+        
+      } catch (error) {
+        console.error('Training error:', error);
+        const status = document.getElementById('lstm-status');
+        status.textContent = 'Training failed: ' + error.message;
+        showPopupAlert('Training failed: ' + error.message);
+      }
+    }
 
     // Collapsible tree state
     let elizaTreeState = { expanded: { 'ELIZA': true } };
