@@ -23,11 +23,28 @@ body {
   color: #111;
 }
 
+/* Hero section styling */
+#hero-section {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 1em auto;
+  max-width: 800px;
+  width: 90%;
+}
+
+#hero-image {
+  max-width: 45%;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
 h1 {
   color: #111 !important;
   text-shadow: none !important;
   text-align: center;
-  margin: 1.2em auto 0.5em auto;
+  margin: 0.5em auto 0.3em auto;
 }
 
 h1, h2 {
@@ -878,7 +895,7 @@ li:hover { background: #eee; border-radius: 4px; transition: background 0.2s; }
   align-items: center;
   justify-content: center;
   margin-bottom: 2em;
-  margin-top: 1em;
+  margin-top: 0.5em;
   max-width: 800px;
   width: 90%;
   margin-left: auto;
@@ -887,7 +904,7 @@ li:hover { background: #eee; border-radius: 4px; transition: background 0.2s; }
 #intro-section p {
   font-size: 1.3em;
   color: #111;
-  margin-bottom: 0.7em;
+  margin-bottom: 0.4em;
   text-align: center;
   font-family: 'Georgia', 'Times New Roman', serif;
 }
