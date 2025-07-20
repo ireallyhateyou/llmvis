@@ -5,40 +5,52 @@
   <title>LLMVis</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.18.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.18.0/dist/tf-backend-wasm.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis"></script>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <script src="lstm.js"></script>
   <script>
-    // Configure TensorFlow.js to handle WASM loading issues
+    // Configure TensorFlow.js to use the best available backend
     window.addEventListener('load', async function() {
       try {
-        // Set TensorFlow.js to use CPU backend by default to avoid WASM issues
-        await tf.setBackend('cpu');
-        console.log('TensorFlow.js backend set to:', tf.getBackend());
+        // Wait for TensorFlow.js to be ready
+        await tf.ready();
+        
+        // Try to use the best available backend in order of preference
+        const preferredBackends = ['wasm', 'webgl', 'cpu'];
+        let backendSet = false;
+        
+        for (const backend of preferredBackends) {
+          try {
+            await tf.setBackend(backend);
+            console.log('TensorFlow.js backend set to:', tf.getBackend());
+            backendSet = true;
+            break;
+          } catch (e) {
+            console.log(`Failed to set ${backend} backend:`, e);
+          }
+        }
+        
+        if (!backendSet) {
+          console.error('Failed to set any backend, using default');
+          // Use CPU as fallback
+          await tf.setBackend('cpu');
+          console.log('Using default backend:', tf.getBackend());
+        }
         
         // Enable production mode for better performance
         tf.enableProdMode();
         
-        // Add error handling for WASM loading
-        if (tf.getBackend() === 'wasm') {
-          console.log('WASM backend detected, configuring...');
-          // Force CPU backend if WASM fails
-          try {
-            await tf.setBackend('cpu');
-            console.log('Falling back to CPU backend');
-          } catch (e) {
-            console.error('Failed to set CPU backend:', e);
-          }
-        }
+        // Log backend capabilities
+        console.log('Backend capabilities:', {
+          backend: tf.getBackend(),
+          isWebGL: tf.getBackend() === 'webgl',
+          isWASM: tf.getBackend() === 'wasm',
+          isCPU: tf.getBackend() === 'cpu'
+        });
+        
       } catch (error) {
         console.error('TensorFlow.js initialization error:', error);
-        // Force CPU backend on error
-        try {
-          await tf.setBackend('cpu');
-          console.log('Forced CPU backend due to initialization error');
-        } catch (e) {
-          console.error('Failed to set CPU backend:', e);
-        }
       }
     });
   </script>
@@ -131,15 +143,15 @@ And by opposing end them.</textarea>
     <div class="lstm-controls">
       <div class="control-group">
         <label for="lstm-epochs">Epochs:</label>
-        <input type="number" id="lstm-epochs" value="40" min="1" max="100">
+        <input type="number" id="lstm-epochs" value="50" min="1" max="100">
       </div>
       <div class="control-group">
         <label for="lstm-batch-size">Batch Size:</label>
-        <input type="number" id="lstm-batch-size" value="16" min="8" max="128">
+        <input type="number" id="lstm-batch-size" value="32" min="4" max="128">
       </div>
       <div class="control-group">
         <label for="lstm-seq-length">Sequence Length:</label>
-        <input type="number" id="lstm-seq-length" value="30" min="5" max="200">
+        <input type="number" id="lstm-seq-length" value="25" min="5" max="200">
       </div>
     </div>
     
@@ -217,9 +229,13 @@ and so should you!</textarea>
     </div>
     <div style="margin-bottom:1em;">
       <input id="attn-prompt" type="text" value="The girl ran to a local pub to escape the din of her city." style="width:60%">
+    </div>
+    <div style="margin-bottom:1em;">
       <button id="attn-run-btn" disabled>Visualize Attention</button>
-      <label style="margin-left:1em;">Layer: <input id="attn-layer" type="number" min="0" max="11" value="0" style="width:3em"></label>
-      <label style="margin-left:1em;">Head: <input id="attn-head" type="number" min="0" max="11" value="0" style="width:3em"></label>
+    </div>
+    <div style="margin-bottom:1em;">
+      <label style="display:block; margin-bottom:0.5em;">Layer: <input id="attn-layer" type="number" min="0" max="11" value="0" style="width:3em"></label>
+      <label style="display:block;">Head: <input id="attn-head" type="number" min="0" max="11" value="0" style="width:3em"></label>
     </div>
     <div id="attn-tokens"></div>
     <div style="display:flex; flex-direction:column; align-items:center;">
@@ -237,7 +253,7 @@ and so should you!</textarea>
     <script src="eliza.js"></script>
     <script src="slm.js"></script>
     <script src="rwkv.js"></script>
-  <script src="gpt2.js" type="module"></script>
+
   <script>
     // Model picker logic
     const modelPicker = document.getElementById('model-picker');
@@ -337,11 +353,11 @@ and so should you!</textarea>
         }
         
         // Update parameters for Shakespeare (conservative)
-        seqLength.value = '20';   // Shorter sequences to prevent hanging
-        epochs.value = '15';      // More epochs to see evolution
-        batchSize.value = '8';    // Smaller batch size
+        seqLength.value = '20';   // Shorter sequences for browser
+        epochs.value = '20';      // Conservative epochs for browser
+        batchSize.value = '4';    // Smaller batch size for browser
         
-        showPopupAlert('Shakespeare mode enabled! Using conservative model with 16 LSTM units.');
+                  showPopupAlert('Shakespeare mode enabled! Using browser-optimized model with 64+32 LSTM units.');
       } else {
         // Reset to default values
         trainText.value = '';
