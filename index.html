@@ -58,6 +58,7 @@
         <option value="lstm">Long Short-Term Memory (LSTM)</option>
         <option value="slm">Small Language Model (SLM)</option>
         <option value="rwkv">RWKV (RNN-Transformer Hybrid)</option>
+        <option value="gpt2">GPT-2</option>
       </select>
     </div>
   </div>
@@ -121,23 +122,24 @@ and so should you!</textarea>
     </div>
     
     <label for="lstm-train-text">Training Text:</label>
-    <textarea id="lstm-train-text" placeholder="Enter training text or use Shakespeare corpus...">The quick brown fox jumps over the lazy dog.
-Pack my box with five dozen liquor jugs.
-Sphinx of black quartz, judge my vow.
-How razorback-jumping frogs can level six piqued gymnasts!</textarea>
+    <textarea id="lstm-train-text" placeholder="Enter training text or use Shakespeare corpus...">To be, or not to be, that is the question:
+Whether 'tis nobler in the mind to suffer
+The slings and arrows of outrageous fortune,
+Or to take arms against a sea of troubles
+And by opposing end them.</textarea>
     
     <div class="lstm-controls">
       <div class="control-group">
         <label for="lstm-epochs">Epochs:</label>
-        <input type="number" id="lstm-epochs" value="20" min="1" max="100">
+        <input type="number" id="lstm-epochs" value="40" min="1" max="100">
       </div>
       <div class="control-group">
         <label for="lstm-batch-size">Batch Size:</label>
-        <input type="number" id="lstm-batch-size" value="32" min="8" max="128">
+        <input type="number" id="lstm-batch-size" value="16" min="8" max="128">
       </div>
       <div class="control-group">
         <label for="lstm-seq-length">Sequence Length:</label>
-        <input type="number" id="lstm-seq-length" value="10" min="5" max="200">
+        <input type="number" id="lstm-seq-length" value="30" min="5" max="200">
       </div>
     </div>
     
@@ -204,11 +206,26 @@ and so should you!</textarea>
     <div id="rwkv-vis"></div>
   </div>
   
+  <div id="gpt2-container" style="display: none;">
+    <h2>GPT-2</h2>
+    <div style="margin-bottom:1em;">
+      <label for="gpt2-input">Prompt:</label>
+      <input type="text" id="gpt2-input" style="width:60%;" placeholder="Enter prompt...">
+      <label for="gpt2-max-tokens" style="margin-left:1em;">Max Tokens:</label>
+      <input type="number" id="gpt2-max-tokens" value="40" min="1" max="100">
+      <button id="gpt2-generate-btn" type="button">Generate</button>
+    </div>
+    <div id="gpt2-status" style="margin-bottom:0.5em;color:#666;"></div>
+    <div id="gpt2-output" style="margin-bottom:1em;"></div>
+    <div id="gpt2-vis"></div>
+  </div>
+  
   <script src="markov.js"></script>
       <script src="elizabot.js"></script>
     <script src="eliza.js"></script>
     <script src="slm.js"></script>
     <script src="rwkv.js"></script>
+  <script src="gpt2.js" type="module"></script>
   <script>
     // Model picker logic
     const modelPicker = document.getElementById('model-picker');
@@ -217,6 +234,7 @@ and so should you!</textarea>
     const lstmContainer = document.getElementById('lstm-container');
     const slmContainer = document.getElementById('slm-container');
     const rwkvContainer = document.getElementById('rwkv-container');
+    const gpt2Container = document.getElementById('gpt2-container');
     
     modelPicker.addEventListener('change', function() {
       if (this.value === 'eliza') {
@@ -225,18 +243,21 @@ and so should you!</textarea>
         lstmContainer.style.display = 'none';
         slmContainer.style.display = 'none';
         rwkvContainer.style.display = 'none';
+        gpt2Container.style.display = 'none';
       } else if (this.value === 'markov') {
         markovContainer.style.display = 'block';
         elizaContainer.style.display = 'none';
         lstmContainer.style.display = 'none';
         slmContainer.style.display = 'none';
         rwkvContainer.style.display = 'none';
+        gpt2Container.style.display = 'none';
       } else if (this.value === 'lstm') {
         markovContainer.style.display = 'none';
         elizaContainer.style.display = 'none';
         lstmContainer.style.display = 'block';
         slmContainer.style.display = 'none';
         rwkvContainer.style.display = 'none';
+        gpt2Container.style.display = 'none';
       } else if (this.value === 'slm') {
         markovContainer.style.display = 'none';
         elizaContainer.style.display = 'none';
@@ -247,6 +268,7 @@ and so should you!</textarea>
           window.initSLMVisualization();
         }
         rwkvContainer.style.display = 'none';
+        gpt2Container.style.display = 'none';
       } else if (this.value === 'rwkv') {
         markovContainer.style.display = 'none';
         elizaContainer.style.display = 'none';
@@ -256,6 +278,18 @@ and so should you!</textarea>
         // Initialize RWKV visualization when selected
         if (window.initRWKVVisualization) {
           window.initRWKVVisualization();
+        }
+        gpt2Container.style.display = 'none';
+      } else if (this.value === 'gpt2') {
+        markovContainer.style.display = 'none';
+        elizaContainer.style.display = 'none';
+        lstmContainer.style.display = 'none';
+        slmContainer.style.display = 'none';
+        rwkvContainer.style.display = 'none';
+        gpt2Container.style.display = 'block';
+        // Initialize GPT-2 UI when selected
+        if (window.initGPT2UI) {
+          window.initGPT2UI();
         }
       }
     });
@@ -291,9 +325,9 @@ and so should you!</textarea>
         }
         
         // Update parameters for Shakespeare (conservative)
-        seqLength.value = '10';   // Shorter sequences to prevent hanging
+        seqLength.value = '20';   // Shorter sequences to prevent hanging
         epochs.value = '15';      // More epochs to see evolution
-        batchSize.value = '64';   // Larger batch size for Shakespeare mode
+        batchSize.value = '8';    // Smaller batch size
         
         showPopupAlert('Shakespeare mode enabled! Using conservative model with 16 LSTM units.');
       } else {
@@ -304,7 +338,7 @@ and so should you!</textarea>
         batchSize.value = '32';
         
         showPopupAlert('Standard mode enabled.');
-      }
+      }x
     }
 
     // Simplified training function that uses the LSTM.js functions
