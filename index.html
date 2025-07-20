@@ -206,20 +206,32 @@ and so should you!</textarea>
     <div id="rwkv-vis"></div>
   </div>
   
-  <div id="gpt2-container" style="display: none;">
-    <h2>GPT-2</h2>
-    <div style="margin-bottom:1em;">
-      <label for="gpt2-input">Prompt:</label>
-      <input type="text" id="gpt2-input" style="width:60%;" placeholder="Enter prompt...">
-      <label for="gpt2-max-tokens" style="margin-left:1em;">Max Tokens:</label>
-      <input type="number" id="gpt2-max-tokens" value="40" min="1" max="100">
-      <button id="gpt2-generate-btn" type="button">Generate</button>
+  <div id="gpt2-container" class="model-container" style="display: none; margin: 2em auto; padding: 2em; border: 2px solid #000000; border-radius: 8px; background: #ffffff; font-family: 'Times New Roman', serif; max-width: 800px; width: 90%; text-align: center;">
+    <h2 style="text-align:center;">GPT-2 Visualizer</h2>
+    <div id="model-load-row" style="margin-bottom:1em; display: flex; flex-direction: column; align-items: center;">
+      <button id="attn-load-model-btn" style="padding:0.5em 1em;font-weight:bold;display:flex;flex-direction:column;align-items:center;">
+        <span>Load Model</span>
+        <span style="font-size:0.95em;color:#555;">(courtesy of Amanvir's visualizer)</span>
+      </button>
+      <span id="attn-model-progress" style="margin-left:1em;display:none;"></span>
     </div>
-    <div id="gpt2-status" style="margin-bottom:0.5em;color:#666;"></div>
-    <div id="gpt2-output" style="margin-bottom:1em;"></div>
-    <div id="gpt2-vis"></div>
+    <div style="margin-bottom:1em;">
+      <input id="attn-prompt" type="text" value="The girl ran to a local pub to escape the din of her city." style="width:60%">
+      <button id="attn-run-btn" disabled>Visualize Attention</button>
+      <label style="margin-left:1em;">Layer: <input id="attn-layer" type="number" min="0" max="11" value="0" style="width:3em"></label>
+      <label style="margin-left:1em;">Head: <input id="attn-head" type="number" min="0" max="11" value="0" style="width:3em"></label>
+    </div>
+    <div id="attn-tokens"></div>
+    <div style="display:flex; flex-direction:column; align-items:center;">
+      <svg id="attention-heatmap" width="500" height="500" style="margin-bottom:2em;"></svg>
+      <svg id="attention-graph" width="500" height="300"></svg>
+    </div>
+    <div id="attn-status"></div>
   </div>
-  
+
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script type="module" src="gpt2-attn.js"></script>
   <script src="markov.js"></script>
       <script src="elizabot.js"></script>
     <script src="eliza.js"></script>
@@ -731,6 +743,8 @@ and so should you!</textarea>
     <span id="popup-alert-message"></span>
   </div>
   
+  <div id="global-error" style="color:#c00;font-weight:bold;margin:1em 0;"></div>
+  
   <style>
     #eliza-tree ul, #eliza-tree li {
       list-style-type: none;
@@ -758,5 +772,10 @@ and so should you!</textarea>
       margin-bottom: 0.1em;
     }
   </style>
+  <script type="module">
+    import { encode, decode } from "https://cdn.jsdelivr.net/npm/gpt-tokenizer@3.0.1/+esm";
+    window.encode = encode;
+    window.decode = decode;
+  </script>
 </body>
 </html> 
