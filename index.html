@@ -121,25 +121,23 @@ and so should you!</textarea>
     </div>
     
     <label for="lstm-train-text">Training Text:</label>
-    <textarea id="lstm-train-text" placeholder="Enter training text or use Shakespeare corpus...">Roses are red,
-Violets are blue,
-I love Hack Club
-and so should you! 
-The quick brown fox jumps over the lazy dog.
-As I said, THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG!!</textarea>
+    <textarea id="lstm-train-text" placeholder="Enter training text or use Shakespeare corpus...">The quick brown fox jumps over the lazy dog.
+Pack my box with five dozen liquor jugs.
+Sphinx of black quartz, judge my vow.
+How razorback-jumping frogs can level six piqued gymnasts!</textarea>
     
     <div class="lstm-controls">
       <div class="control-group">
         <label for="lstm-epochs">Epochs:</label>
-        <input type="number" id="lstm-epochs" value="25" min="1" max="100">
+        <input type="number" id="lstm-epochs" value="20" min="1" max="100">
       </div>
       <div class="control-group">
         <label for="lstm-batch-size">Batch Size:</label>
-        <input type="number" id="lstm-batch-size" value="8" min="8" max="128">
+        <input type="number" id="lstm-batch-size" value="32" min="8" max="128">
       </div>
       <div class="control-group">
         <label for="lstm-seq-length">Sequence Length:</label>
-        <input type="number" id="lstm-seq-length" value="15" min="5" max="200">
+        <input type="number" id="lstm-seq-length" value="10" min="5" max="200">
       </div>
     </div>
     
@@ -163,15 +161,15 @@ and so should you!</textarea>
     <div class="slm-controls">
       <div class="control-group">
         <label for="slm-epochs">Epochs:</label>
-        <input type="number" id="slm-epochs" value="25" min="1" max="100">
+        <input type="number" id="slm-epochs" value="40" min="1" max="100">
       </div>
       <div class="control-group">
         <label for="slm-batch-size">Batch Size:</label>
-        <input type="number" id="slm-batch-size" value="8" min="4" max="32">
+        <input type="number" id="slm-batch-size" value="16" min="4" max="32">
       </div>
       <div class="control-group">
         <label for="slm-seq-length">Sequence Length:</label>
-        <input type="number" id="slm-seq-length" value="15" min="5" max="50">
+        <input type="number" id="slm-seq-length" value="30" min="5" max="50">
       </div>
     </div>
     
@@ -293,9 +291,9 @@ and so should you!</textarea>
         }
         
         // Update parameters for Shakespeare (conservative)
-        seqLength.value = '20';   // Shorter sequences to prevent hanging
+        seqLength.value = '10';   // Shorter sequences to prevent hanging
         epochs.value = '15';      // More epochs to see evolution
-        batchSize.value = '8';    // Smaller batch size
+        batchSize.value = '64';   // Larger batch size for Shakespeare mode
         
         showPopupAlert('Shakespeare mode enabled! Using conservative model with 16 LSTM units.');
       } else {
@@ -306,7 +304,7 @@ and so should you!</textarea>
         batchSize.value = '32';
         
         showPopupAlert('Standard mode enabled.');
-      }x
+      }
     }
 
     // Simplified training function that uses the LSTM.js functions
@@ -358,12 +356,6 @@ and so should you!</textarea>
           sequences.push({ input: sequence, label: nextChar });
         }
               console.log('Created', sequences.length, 'sequences');
-      
-      // Check if data is too large
-      if (sequences.length > 1000) {
-        showPopupAlert('Training data too large! Please use shorter text or reduce sequence length.');
-        return;
-      }
       
       // Vectorize data
       console.log('Vectorizing data...');

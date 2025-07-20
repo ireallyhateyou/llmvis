@@ -227,12 +227,13 @@ function updateMetricsDisplay(epoch, loss, minLoss) {
 function updateProgressBar(currentEpoch, totalEpochs) {
   const progressFill = document.getElementById('progress-fill');
   const progressText = document.getElementById('progress-text');
-  
+  // Use window.totalEpochs if available
+  const total = window.totalEpochs || totalEpochs || 40;
   if (progressFill && progressText) {
-    const percentage = (currentEpoch / totalEpochs) * 100;
+    const percentage = (currentEpoch / total) * 100;
     progressFill.style.width = `${percentage}%`;
     progressFill.style.transition = 'width 0.3s ease';
-    progressText.textContent = `Training: ${currentEpoch}/${totalEpochs} epochs (${percentage.toFixed(1)}%)`;
+    progressText.textContent = `Training: ${currentEpoch}/${total} epochs (${percentage.toFixed(1)}%)`;
   }
 }
 
@@ -274,45 +275,49 @@ function createSequences(text, seqLength, charToIdx) {
 // --- 3. Model Creation ---
 function createLSTMModel(seqLength, vocabSize) {
   const model = tf.sequential();
-  // Much smaller model to prevent freezing
   model.add(tf.layers.lstm({
-    units: 8, // Reduced from 16
+    units: 64,
     inputShape: [seqLength, vocabSize],
+    returnSequences: true
+  }));
+  model.add(tf.layers.lstm({
+    units: 64,
     returnSequences: false
   }));
   model.add(tf.layers.dense({units: vocabSize, activation: 'softmax'}));
+  // Adam with gradient clipping if available
+  let optimizer;
+  if (tf.train.adam.length >= 2) {
+    optimizer = tf.train.adam(0.0005, undefined, undefined, undefined, 1.0, 5.0); // clipNorm=5.0
+  } else {
+    optimizer = tf.train.adam(0.0005);
+  }
   model.compile({
     loss: 'categoricalCrossentropy',
-    optimizer: tf.train.adam(0.01) // Lower learning rate
+    optimizer
   });
   return model;
 }
 
-// Enhanced model creation for Shakespeare (very conservative to prevent hanging)
+// Enhanced model creation for Shakespeare (even bigger)
 function createShakespeareLSTMModel(seqLength, vocabSize) {
   const model = tf.sequential();
-  
-  // Very small model to prevent browser hanging
   model.add(tf.layers.lstm({
-    units: 16, // Very small
+    units: 64, // Keep at 64 for Shakespeare
     returnSequences: false,
     inputShape: [seqLength, vocabSize],
-    dropout: 0.0, // No dropout to reduce complexity
+    dropout: 0.0,
     recurrentDropout: 0.0
   }));
-  
-  // Output layer
   model.add(tf.layers.dense({
     units: vocabSize,
     activation: 'softmax'
   }));
-  
   model.compile({
-    optimizer: tf.train.adam(0.01), // Higher learning rate for faster convergence
+    optimizer: tf.train.adam(0.001), // Lowered learning rate
     loss: 'categoricalCrossentropy',
     metrics: ['accuracy']
   });
-  
   return model;
 }
 
@@ -335,71 +340,87 @@ function vectorizeData(inputs, labels, seqLength, vocabSize) {
 // --- 5. Training Function ---
 async function trainLSTMModel(model, xs, ys, epochs, batchSize, statusCallback) {
   console.log('Starting training with:', { epochs, batchSize, xsShape: xs.shape, ysShape: ys.shape });
-  
+  window.totalEpochs = epochs;
   const history = {
     loss: [],
     accuracy: []
   };
-  
+  // Batch progress text setup
+  let batchProgressText = document.getElementById('lstm-batch-progress');
+  if (!batchProgressText) {
+    batchProgressText = document.createElement('div');
+    batchProgressText.id = 'lstm-batch-progress';
+    batchProgressText.style.margin = '0.5em 0';
+    batchProgressText.style.fontWeight = 'bold';
+    const status = document.getElementById('lstm-status') || document.body;
+    status.parentNode.insertBefore(batchProgressText, status.nextSibling);
+  }
+  const totalBatches = epochs * Math.ceil(xs.shape[0] / batchSize);
+  let batchCount = 0;
   // Simplified learning rate scheduler
   const learningRateScheduler = (epoch) => {
     if (epoch < 5) return 0.001;
     return 0.0005;
   };
-  
   try {
     for (let epoch = 0; epoch < epochs; epoch++) {
       console.log(`Starting epoch ${epoch + 1}/${epochs}`);
-      
       // Update learning rate
       const currentLR = learningRateScheduler(epoch);
       model.optimizer.learningRate = currentLR;
-      
-      // Train for one epoch with timeout
-      const trainingPromise = model.fit(xs, ys, {
+      // Train for one epoch
+      const fitResult = await model.fit(xs, ys, {
         batchSize: batchSize,
         epochs: 1,
         shuffle: true,
         callbacks: {
           onBatchBegin: (batch, logs) => {
-            console.log(`Batch ${batch} started`);
+            batchCount++;
+            if (batchProgressText) {
+              batchProgressText.textContent = `Batch ${batchCount} / ${totalBatches}`;
+            }
+            // Only call statusCallback if loss is a valid, nonzero number
+            if (logs && typeof logs.loss === 'number' && logs.loss > 0) {
+              if (statusCallback) statusCallback(epoch + 1, logs.loss, Math.min(...history.loss, logs.loss), currentLR);
+            }
           },
           onBatchEnd: (batch, logs) => {
-            console.log(`Batch ${batch} completed`);
+            if (batchProgressText) {
+              batchProgressText.textContent = `Batch ${batchCount} / ${totalBatches}`;
+            }
+            // Only call statusCallback if loss is a valid, nonzero number
+            if (logs && typeof logs.loss === 'number' && logs.loss > 0) {
+              if (statusCallback) statusCallback(epoch + 1, logs.loss, Math.min(...history.loss, logs.loss), currentLR);
+            }
             // Memory cleanup
             tf.tidy(() => {});
           }
         }
       });
-      
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Training timeout - model too complex')), 30000); // 30 second timeout
-      });
-      
-      const result = await Promise.race([trainingPromise, timeoutPromise]);
-      
-      const loss = result.history.loss[0];
-      const accuracy = result.history.accuracy ? result.history.accuracy[0] : 0;
-      
-      console.log(`Epoch ${epoch + 1} completed - Loss: ${loss}, Accuracy: ${accuracy}`);
-      
+      // Get loss/accuracy from last batch
+      const result = fitResult && fitResult.history ? fitResult : { history: { loss: [0], accuracy: [0] } };
+      const loss = result.history.loss && typeof result.history.loss[0] === 'number' ? result.history.loss[0] : 0;
+      const accuracy = result.history.accuracy && typeof result.history.accuracy[0] === 'number' ? result.history.accuracy[0] : 0;
       history.loss.push(loss);
       history.accuracy.push(accuracy);
-      
-      // Call status callback
-      if (statusCallback) {
-        statusCallback(epoch + 1, loss, Math.min(...history.loss), currentLR);
-      }
-      
-      // Yield to browser
+      if (statusCallback) statusCallback(epoch + 1, loss, Math.min(...history.loss), currentLR);
       await tf.nextFrame();
+      // After 5 epochs, check if loss has decreased. If not, log a warning.
+      if (epoch === 5 && history.loss.length >= 5) {
+        if (history.loss[4] >= history.loss[0]) {
+          console.warn('Warning: Loss has not decreased after 5 epochs. Check model/data.');
+        }
+      }
     }
   } catch (error) {
     console.error('Training error:', error);
+    if (batchProgressText) batchProgressText.style.color = '#b00';
     throw error;
   }
-  
+  if (batchProgressText) {
+    batchProgressText.textContent = 'Batches: Done';
+    setTimeout(() => { if (batchProgressText) batchProgressText.remove(); }, 2000);
+  }
   console.log('Training completed successfully');
   return history;
 }
@@ -441,16 +462,32 @@ async function generateText(model, seed, charToIdx, idxToChar, genLength, temper
 }
 
 function sampleWithTemperature(logits, temperature) {
-  const logitsArr = Array.from(logits);
+  let logitsArr = Array.from(logits);
+  // Remove NaNs and negative/infinite values
+  logitsArr = logitsArr.map(x => (isFinite(x) && x > 0 ? x : 1e-8));
+  // Apply temperature
   const exp = logitsArr.map(x => Math.exp(x / temperature));
-  const sum = exp.reduce((a, b) => a + b, 0);
+  let sum = exp.reduce((a, b) => a + b, 0);
+  // If sum is not finite or zero, fall back to uniform
+  if (!isFinite(sum) || sum <= 0) {
+    const n = logitsArr.length;
+    return Math.floor(Math.random() * n);
+  }
   const probs = exp.map(x => x / sum);
   let r = Math.random();
   for (let i = 0; i < probs.length; ++i) {
     r -= probs[i];
     if (r <= 0) return i;
   }
-  return probs.length - 1;
+  // Fallback: return most probable index
+  let maxProb = -Infinity, maxIdx = 0;
+  for (let i = 0; i < probs.length; ++i) {
+    if (probs[i] > maxProb) {
+      maxProb = probs[i];
+      maxIdx = i;
+    }
+  }
+  return maxIdx;
 }
 
 // --- 7. UI Integration ---
@@ -488,6 +525,9 @@ function ensureIdxToCharArray() {
   }
 }
 
+// --- User-configurable max training sequences ---
+window.maxLSTMSequences = 1000; // Default limit, can be overridden by user
+
 window.addEventListener('DOMContentLoaded', () => {
   const trainBtn = document.getElementById('lstm-train-btn');
   const trainStatus = document.getElementById('lstm-train-status');
@@ -499,9 +539,9 @@ window.addEventListener('DOMContentLoaded', () => {
   const shakespeareModeToggle = document.getElementById('shakespeare-mode');
 
   // Set better defaults for visible evolution
-  if (seqInput) seqInput.value = 15;
-  if (epochsInput) epochsInput.value = 25;
-  if (batchInput) batchInput.value = 8;
+  if (seqInput) seqInput.value = 30; // Larger default sequence length
+  if (epochsInput) epochsInput.value = 40; // More epochs
+  if (batchInput) batchInput.value = 16; // Larger batch size
 
   if (sampleBtn && trainTextArea) {
     sampleBtn.onclick = () => {
@@ -522,9 +562,9 @@ window.addEventListener('DOMContentLoaded', () => {
           trainTextArea.value = corpus;
           
           // Update parameters for Shakespeare
-          seqInput.value = '140';  // Longer sequences for better context
-          epochsInput.value = '50';      // More epochs for complex text
-          batchInput.value = '64';   // Larger batch size
+          seqInput.value = '60';   // Even longer sequences
+          epochsInput.value = '30';      // More epochs
+          batchInput.value = '16';    // Larger batch size
           
           showPopupAlert('Shakespeare mode enabled! Using enhanced model with 256+128 LSTM units.');
         } else {
@@ -542,10 +582,6 @@ window.addEventListener('DOMContentLoaded', () => {
         const batchSize = parseInt(batchInput.value);
         
         // Reasonable limits to prevent hanging
-        if (text.length > 5000) {
-          showPopupAlert('Text too long! Use less than 5000 characters.');
-          return;
-        }
         if (seqLength > 50) {
           showPopupAlert('Sequence length too high! Use 50 or less.');
           return;
@@ -581,6 +617,16 @@ window.addEventListener('DOMContentLoaded', () => {
         
         const {inputs, labels} = createSequences(text, seqLength, charToIdx);
         const {xs, ys} = vectorizeData(inputs, labels, seqLength, idxToChar.length);
+        
+        // After vectorizeData in trainLSTM, print the first 3 input/output pairs as indices and decoded text
+        for (let i = 0; i < Math.min(3, inputs.length); ++i) {
+          console.log('Sample', i, 'input indices:', inputs[i], 'as text:', indicesToText(inputs[i], idxToChar));
+          console.log('Sample', i, 'label index:', labels[i], 'as char:', idxToChar[labels[i]]);
+        }
+        
+        if (xs.shape[2] !== idxToChar.length || ys.shape[1] !== idxToChar.length) {
+          console.warn('Vectorized data shape mismatch: xs.shape', xs.shape, 'ys.shape', ys.shape, 'vocab size', idxToChar.length);
+        }
         
         trainStatus.textContent = 'Creating model...';
         await tf.nextFrame();
@@ -656,7 +702,7 @@ function initGenerationVisualization() {
     <div class="generation-controls">
       <div class="input-group">
         <label for="generation-seed">Seed Text:</label>
-        <input type="text" id="generation-seed" placeholder="I love Shipwrecked" value="I love Shipwrecked" style="width: 300px;">
+        <input type="text" id="generation-seed" placeholder="To be, or not to be" value="To be, or not to be" style="width: 300px;">
         <small id="seed-note" style="color:#888;display:block;">Only the first <span id="seq-len-note"></span> characters will be used as seed.</small>
       </div>
       <div class="input-group">
@@ -837,6 +883,16 @@ function resetGenerationVisualization() {
 
 async function generateNextCharacter() {
   ensureIdxToCharArray();
+  // Debug: print mapping for every character in the actual seed
+  const seed = generationVisualization && generationVisualization.seedText
+    ? generationVisualization.seedText
+    : (typeof seedInput !== 'undefined' && seedInput ? seedInput.value : '');
+  console.log('Seed mapping:');
+  for (const c of seed) {
+    console.log(`'${c}':`, window.charToIdx ? window.charToIdx[c] : undefined);
+  }
+  // Debug: show currentText
+  console.log('Current generationVisualization.currentText:', generationVisualization.currentText);
   console.log('generateNextCharacter called');
   console.log('Global variables:', {
     lstmModel: !!window.lstmModel,
@@ -857,7 +913,20 @@ async function generateNextCharacter() {
     return;
   }
   try {
+    // Defensive: ensure currentText is initialized
+    if (!generationVisualization.currentText || typeof generationVisualization.currentText !== 'string' || generationVisualization.currentText.length === 0) {
+      showPopupAlert('Seed/context is empty. Please reset and try again.');
+      pauseGenerationVisualization();
+      return;
+    }
     const inputIndices = textToIndices(generationVisualization.currentText, window.charToIdx);
+    console.log('inputIndices:', inputIndices);
+    // If all indices are 0, warn
+    if (inputIndices.every(i => i === 0)) {
+      showPopupAlert('All input indices are 0. This means your seed/context is not matching the vocabulary. Please check your seed and training text.');
+      pauseGenerationVisualization();
+      return;
+    }
     // Ensure we have the right sequence length
     const seqLength = window.seqLength || 15;
     const vocabSize = Array.isArray(window.idxToChar) ? window.idxToChar.length : Object.keys(window.idxToChar).length;
@@ -873,6 +942,7 @@ async function generateNextCharacter() {
     // Guard: check for invalid indices
     if (paddedIndices.some(i => typeof i !== 'number' || isNaN(i) || i < 0 || i >= vocabSize)) {
       console.error('Invalid input indices:', paddedIndices);
+      showPopupAlert('Invalid input indices detected. Please check your seed and training text.');
       pauseGenerationVisualization();
       return;
     }
@@ -894,8 +964,8 @@ async function generateNextCharacter() {
     nextIdx = sampleWithTemperature(preds, 0.8); // Use temperature for variety
     const vocabLen = Array.isArray(window.idxToChar) ? window.idxToChar.length : Object.keys(window.idxToChar).length;
     console.log('Sampled nextIdx:', nextIdx, 'idxToChar.length:', vocabLen, 'preds:', preds);
-    // Defensive fix: if nextIdx is out of bounds, pick the most probable valid index
-    if (typeof nextIdx !== 'number' || nextIdx < 0 || nextIdx >= vocabLen) {
+    // Defensive fix: if nextIdx is not a valid index, pick the most probable valid index
+    if (typeof nextIdx !== 'number' || isNaN(nextIdx) || nextIdx < 0 || nextIdx >= vocabLen) {
       // Find the most probable valid index
       let maxProb = -Infinity, maxIdx = 0;
       for (let i = 0; i < preds.length && i < vocabLen; ++i) {
@@ -908,7 +978,13 @@ async function generateNextCharacter() {
       nextIdx = maxIdx;
     }
     const nextChar = window.idxToChar[nextIdx] || '?';
-    // Update current text
+    // --- PATCH: Prevent '?' from corrupting context ---
+    if (!nextChar || nextChar === '?') {
+      showPopupAlert('Model generated an invalid character ("?"). Generation stopped. Try training with more data, more epochs, or a slightly larger model if you still see this popup.');
+      pauseGenerationVisualization();
+      return;
+    }
+    // Only append valid, in-vocab characters to context
     generationVisualization.currentText += nextChar;
     if (generationVisualization.currentText.length > seqLength) {
       generationVisualization.currentText = generationVisualization.currentText.slice(1);
@@ -916,23 +992,9 @@ async function generateNextCharacter() {
     // Update displays
     updateGenerationDisplays(nextChar, preds, nextIdx);
     tf.dispose(inputTensor);
-    // Remove/guard LSTM state visualization block to prevent null errors
-    /*
-    if (window.lstmModel && window.lstmModel.layers) {
-      const lstmLayer = window.lstmModel.layers.find(l => l.getClassName && l.getClassName() === 'LSTM');
-      if (lstmLayer && lstmLayer.states && lstmLayer.states[0]) {
-        try {
-          const hidden = lstmLayer.states[0].arraySync()[0];
-          lstmMemoryStates.push(hidden);
-          drawLSTMMemoryHeatmap(lstmMemoryStates);
-        } catch (e) {
-          // Hidden state not available
-        }
-      }
-    }
-    */
   } catch (error) {
     console.error('Generation error:', error);
+    showPopupAlert('Generation error: ' + error.message);
     pauseGenerationVisualization();
   }
 }
@@ -1025,4 +1087,9 @@ async function loadShakespeareCorpus() {
     // Fallback to a smaller sample
     return `to be or not to be that is the question whether tis nobler in the mind to suffer the slings and arrows of outrageous fortune or to take arms against a sea of troubles and by opposing end them to die to sleep no more and by a sleep to say we end the heart ache and the thousand natural shocks that flesh is heir to tis a consummation devoutly to be wished to die to sleep to sleep perchance to dream ay there's the rub for in that sleep of death what dreams may come when we have shuffled off this mortal coil must give us pause there's the respect that makes calamity of so long life for who would bear the whips and scorns of time the oppressor's wrong the proud man's contumely the pangs of despised love the law's delay the insolence of office and the spurns that patient merit of the unworthy takes when he himself might his quietus make with a bare bodkin who would fardels bear to grunt and sweat under a weary life but that the dread of something after death the undiscovered country from whose bourn no traveller returns puzzles the will and makes us rather bear those ills we have than fly to others that we know not of thus conscience does make cowards of us all and thus the native hue of resolution is sicklied o'er with the pale cast of thought and enterprises of great pitch and moment with this regard their currents turn awry and lose the name of action`;
   }
+} 
+
+// Also update any .toFixed() calls in status/progress updates to guard for undefined or non-number values
+function safeFixed(val, digits) {
+  return (typeof val === 'number' && isFinite(val)) ? val.toFixed(digits) : 'N/A';
 } 
