@@ -55,8 +55,9 @@
       <select id="model-picker">
         <option value="eliza" selected>ELIZA</option>
         <option value="markov">Markov Chain</option>
-        <option value="lstm">LSTM</option>
+        <option value="lstm">Long Short-Term Memory (LSTM)</option>
         <option value="slm">Small Language Model (SLM)</option>
+        <option value="rwkv">RWKV (RNN-Transformer Hybrid)</option>
       </select>
     </div>
   </div>
@@ -109,7 +110,7 @@ and so should you!</textarea>
   </div>
   
       <div id="lstm-container" style="display: none;">
-    <h2>LSTM</h2>
+    <h2>Long Short-Term Memory (LSTM)</h2>
     <!-- Shakespeare Mode Toggle -->
     <div class="shakespeare-mode">
       <label>
@@ -123,7 +124,9 @@ and so should you!</textarea>
     <textarea id="lstm-train-text" placeholder="Enter training text or use Shakespeare corpus...">Roses are red,
 Violets are blue,
 I love Hack Club
-and so should you!</textarea>
+and so should you! 
+The quick brown fox jumps over the lazy dog.
+As I said, THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG!!</textarea>
     
     <div class="lstm-controls">
       <div class="control-group">
@@ -154,10 +157,13 @@ Violets are blue,
 I love Hack Club
 and so should you!</textarea>
     
+    <!-- Default seed text for SLM generation, editable from HTML -->
+    <input type="hidden" id="slm-default-seed" value="I love Shipwrecked reviewers <3">
+    
     <div class="slm-controls">
       <div class="control-group">
         <label for="slm-epochs">Epochs:</label>
-        <input type="number" id="slm-epochs" value="20" min="1" max="100">
+        <input type="number" id="slm-epochs" value="25" min="1" max="100">
       </div>
       <div class="control-group">
         <label for="slm-batch-size">Batch Size:</label>
@@ -165,7 +171,7 @@ and so should you!</textarea>
       </div>
       <div class="control-group">
         <label for="slm-seq-length">Sequence Length:</label>
-        <input type="number" id="slm-seq-length" value="10" min="5" max="50">
+        <input type="number" id="slm-seq-length" value="15" min="5" max="50">
       </div>
     </div>
     
@@ -174,10 +180,37 @@ and so should you!</textarea>
     <div id="slm-vis"></div>
   </div>
   
+  <div id="rwkv-container" style="display: none;">
+    <h2>RWKV (RNN-Transformer Hybrid)</h2>
+    <label for="rwkv-train-text">Training Text:</label>
+    <textarea id="rwkv-train-text" placeholder="Enter training text...">Roses are red,
+Violets are blue,
+I love Hack Club
+and so should you!</textarea>
+    <div class="rwkv-controls">
+      <div class="control-group">
+        <label for="rwkv-epochs">Epochs:</label>
+        <input type="number" id="rwkv-epochs" value="20" min="1" max="100">
+      </div>
+      <div class="control-group">
+        <label for="rwkv-batch-size">Batch Size:</label>
+        <input type="number" id="rwkv-batch-size" value="8" min="4" max="32">
+      </div>
+      <div class="control-group">
+        <label for="rwkv-seq-length">Sequence Length:</label>
+        <input type="number" id="rwkv-seq-length" value="15" min="5" max="50">
+      </div>
+    </div>
+    <button onclick="trainRWKV()">Train Model</button>
+    <div id="rwkv-status"></div>
+    <div id="rwkv-vis"></div>
+  </div>
+  
   <script src="markov.js"></script>
       <script src="elizabot.js"></script>
     <script src="eliza.js"></script>
     <script src="slm.js"></script>
+    <script src="rwkv.js"></script>
   <script>
     // Model picker logic
     const modelPicker = document.getElementById('model-picker');
@@ -185,6 +218,7 @@ and so should you!</textarea>
     const elizaContainer = document.getElementById('eliza-container');
     const lstmContainer = document.getElementById('lstm-container');
     const slmContainer = document.getElementById('slm-container');
+    const rwkvContainer = document.getElementById('rwkv-container');
     
     modelPicker.addEventListener('change', function() {
       if (this.value === 'eliza') {
@@ -192,16 +226,19 @@ and so should you!</textarea>
         elizaContainer.style.display = 'block';
         lstmContainer.style.display = 'none';
         slmContainer.style.display = 'none';
+        rwkvContainer.style.display = 'none';
       } else if (this.value === 'markov') {
         markovContainer.style.display = 'block';
         elizaContainer.style.display = 'none';
         lstmContainer.style.display = 'none';
         slmContainer.style.display = 'none';
+        rwkvContainer.style.display = 'none';
       } else if (this.value === 'lstm') {
         markovContainer.style.display = 'none';
         elizaContainer.style.display = 'none';
         lstmContainer.style.display = 'block';
         slmContainer.style.display = 'none';
+        rwkvContainer.style.display = 'none';
       } else if (this.value === 'slm') {
         markovContainer.style.display = 'none';
         elizaContainer.style.display = 'none';
@@ -210,6 +247,17 @@ and so should you!</textarea>
         // Initialize SLM visualization when selected
         if (window.initSLMVisualization) {
           window.initSLMVisualization();
+        }
+        rwkvContainer.style.display = 'none';
+      } else if (this.value === 'rwkv') {
+        markovContainer.style.display = 'none';
+        elizaContainer.style.display = 'none';
+        lstmContainer.style.display = 'none';
+        slmContainer.style.display = 'none';
+        rwkvContainer.style.display = 'block';
+        // Initialize RWKV visualization when selected
+        if (window.initRWKVVisualization) {
+          window.initRWKVVisualization();
         }
       }
     });
@@ -258,7 +306,7 @@ and so should you!</textarea>
         batchSize.value = '32';
         
         showPopupAlert('Standard mode enabled.');
-      }
+      }x
     }
 
     // Simplified training function that uses the LSTM.js functions

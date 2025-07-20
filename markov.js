@@ -1,4 +1,3 @@
-// Ensure all code runs after DOM is loaded
 window.addEventListener('DOMContentLoaded', function() {
   let markov = null;
 

@@ -1,12 +1,7 @@
-// eliza.js - ELIZA rule parser and visualizer logic
-// Assumes elizabot.js is loaded and ElizaBot is available
-
-console.log('TOP OF eliza.js');
 window.onerror = function(msg, url, line, col, error) {
   console.error('GLOBAL ERROR:', msg, url, line, col, error);
 };
 
-console.log('eliza.js script start');
 // Build a tree structure from ELIZA rules for visualization
 function buildElizaRuleTree() {
   if (typeof window.elizaKeywords === 'undefined') {

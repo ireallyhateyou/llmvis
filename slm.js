@@ -1,315 +1,29 @@
-// Small Language Model (SLM) Implementation
-// Inspired by TinyModel and modern SLM approaches
-
-console.log('SLM: Script loading started');
-
-// Global variables for SLM
-let slmModel = null;
-let slmTokenizer = null;
-let slmVocab = null;
-let slmTrainingData = null;
-let slmTrainingHistory = [];
-
-console.log('SLM: Global variables initialized');
-
-// SLM Configuration - REDUCED SIZES TO PREVENT FREEZING
-const SLM_CONFIG = {
-  vocabSize: 50,   // Reduced from 100
-  maxLength: 16,   // Reduced from 32
-  embeddingDim: 32, // Reduced from 64
-  numLayers: 1,    // Reduced from 2
-  numHeads: 2,     // Reduced from 4
-  dropout: 0.1,
-  learningRate: 0.001,
-  batchSize: 2     // Reduced from 4
-};
-
-console.log('SLM: Configuration loaded:', SLM_CONFIG);
-
-// Simple tokenizer for SLM
-class SimpleTokenizer {
-  constructor(vocabSize = 50) {  // Reduced default
-    console.log('SLM: Creating SimpleTokenizer with vocabSize:', vocabSize);
-    this.vocabSize = vocabSize;
-    this.charToId = {};
-    this.idToChar = {};
-    this.specialTokens = {
-      '[PAD]': 0,
-      '[UNK]': 1,
-      '[BOS]': 2,
-      '[EOS]': 3
-    };
-    console.log('SLM: SimpleTokenizer constructor completed');
-  }
-
-  buildVocab(text) {
-    console.log('SLM: Building vocabulary for text length:', text.length);
-    const startTime = performance.now();
-    
-    const chars = new Set(text.split(''));
-    console.log('SLM: Unique characters found:', chars.size);
-    
-    const sortedChars = Array.from(chars).sort();
-    
-    // Add special tokens
-    Object.entries(this.specialTokens).forEach(([token, id]) => {
-      this.charToId[token] = id;
-      this.idToChar[id] = token;
-    });
-    
-    // Add regular characters (limit to prevent large vocab)
-    const maxRegularChars = this.vocabSize - Object.keys(this.specialTokens).length;
-    console.log('SLM: Adding regular characters, max:', maxRegularChars);
-    
-    sortedChars.slice(0, maxRegularChars).forEach((char, index) => {
-      const id = index + Object.keys(this.specialTokens).length;
-      this.charToId[char] = id;
-      this.idToChar[id] = char;
-    });
-    
-    const endTime = performance.now();
-    console.log(`SLM: Vocabulary built in ${(endTime - startTime).toFixed(2)}ms: ${Object.keys(this.charToId).length} tokens`);
-  }
-
-  encode(text) {
-    console.log('SLM: Encoding text of length:', text.length);
-    const startTime = performance.now();
-    
-    const tokens = text.split('').map(char => 
-      this.charToId[char] || this.charToId['[UNK]']
-    );
-    const result = [this.charToId['[BOS]'], ...tokens, this.charToId['[EOS]']];
-    
-    const endTime = performance.now();
-    console.log(`SLM: Encoding completed in ${(endTime - startTime).toFixed(2)}ms, tokens:`, result.length);
-    return result;
-  }
-
-  decode(ids) {
-    console.log('SLM: Decoding', ids.length, 'tokens');
-    const startTime = performance.now();
-    
-    const result = ids.map(id => this.idToChar[id] || '[UNK]').join('');
-    
-    const endTime = performance.now();
-    console.log(`SLM: Decoding completed in ${(endTime - startTime).toFixed(2)}ms`);
-    return result;
-  }
+// --- Popup Alert Helper ---
+function showPopupAlert(message) {
+  const popup = document.getElementById('popup-alert');
+  const msg = document.getElementById('popup-alert-message');
+  if (msg) msg.textContent = message;
+  if (popup) popup.style.display = 'flex';
 }
 
-// SLM Model Architecture (Simplified and Lighter)
-class SLMModel {
-  constructor(config) {
-    console.log('SLM: Creating SLMModel with config:', config);
-    const startTime = performance.now();
-    
-    this.config = config;
-    this.model = this.buildModel();
-    
-    const endTime = performance.now();
-    console.log(`SLM: Model creation completed in ${(endTime - startTime).toFixed(2)}ms`);
-  }
-
-  buildModel() {
-    console.log('SLM: Building model architecture');
-    const startTime = performance.now();
-    
-    const model = tf.sequential();
-    
-    // Check if model would be too large
-    const estimatedParams = this.config.vocabSize * this.config.embeddingDim + 
-                          this.config.embeddingDim * this.config.embeddingDim * this.config.numLayers +
-                          this.config.embeddingDim * this.config.vocabSize;
-    
-    console.log('SLM: Estimated model parameters:', estimatedParams);
-    
-    if (estimatedParams > 50000) {  // Limit to prevent freezing
-      throw new Error(`Model too large (${estimatedParams} parameters). Reduce vocab size, embedding dim, or layers. Current values: vocabSize=${this.config.vocabSize}, embeddingDim=${this.config.embeddingDim}, numLayers=${this.config.numLayers}`);
-    }
-    
-    // Custom fast initializer to avoid orthogonal initialization slowness
-    const fastInitializer = {
-      className: 'RandomNormal',
-      config: {
-        mean: 0,
-        stddev: 0.1
-      }
-    };
-    
-    // Embedding layer
-    console.log('SLM: Adding embedding layer');
-    model.add(tf.layers.embedding({
-      inputDim: this.config.vocabSize,
-      outputDim: this.config.embeddingDim,
-      inputLength: this.config.maxLength,
-      maskZero: true,
-      embeddingsInitializer: {
-        className: 'GlorotUniform',
-        config: {}
-      }
-    }));
-    
-    // Simple LSTM-based architecture (more reliable than transformer)
-    console.log('SLM: Adding LSTM layer');
-    model.add(tf.layers.lstm({
-      units: this.config.embeddingDim,
-      returnSequences: false,
-      dropout: this.config.dropout,
-      kernelInitializer: fastInitializer,
-      recurrentInitializer: fastInitializer
-    }));
-    
-    // Dense layers (reduced number)
-    console.log('SLM: Adding dense layers, count:', this.config.numLayers);
-    for (let i = 0; i < this.config.numLayers; i++) {
-      console.log(`SLM: Adding dense layer ${i + 1}`);
-      model.add(tf.layers.dense({
-        units: this.config.embeddingDim,
-        activation: 'relu',
-        kernelInitializer: {
-          className: 'GlorotUniform',
-          config: {}
-        }
-      }));
-      
-      model.add(tf.layers.dropout({ rate: this.config.dropout }));
-    }
-    
-    // Output layer
-    console.log('SLM: Adding output layer');
-    model.add(tf.layers.dense({
-      units: this.config.vocabSize,
-      activation: 'softmax',
-      kernelInitializer: {
-        className: 'GlorotUniform',
-        config: {}
-      }
-    }));
-    
-    console.log('SLM: Compiling model');
-    model.compile({
-      optimizer: tf.train.adam(this.config.learningRate),
-      loss: 'sparseCategoricalCrossentropy',
-      metrics: ['accuracy']
-    });
-    
-    const endTime = performance.now();
-    console.log(`SLM: Model build completed in ${(endTime - startTime).toFixed(2)}ms`);
-    return model;
-  }
-
-  async train(data, epochs, callbacks) {
-    console.log('SLM: Starting training with epochs:', epochs);
-    console.log('SLM: Training data shape:', data.xs.shape);
-    
-    // Check data size before training
-    const dataSize = data.xs.shape[0] * data.xs.shape[1];
-    console.log('SLM: Training data size:', dataSize, 'elements');
-    
-    if (dataSize > 10000) {
-      throw new Error(`Training data too large (${dataSize} elements). Use shorter text or reduce sequence length.`);
-    }
-    
-    // Force garbage collection before training to free memory
-    if (typeof window !== 'undefined' && window.gc) {
-      console.log('SLM: Running garbage collection before training');
-      window.gc();
-    }
-    
-    const startTime = performance.now();
-    
-    // Use smaller batch size and add memory management
-    const trainingConfig = {
-      epochs: epochs,
-      batchSize: Math.min(this.config.batchSize, 2), // Reduce batch size to prevent memory issues
-      validationSplit: 0.2,
-      callbacks: callbacks,
-      verbose: 0
-    };
-    
-    console.log('SLM: Training config:', trainingConfig);
-    
-    const history = await this.model.fit(data.xs, data.ys, trainingConfig);
-    
-    const endTime = performance.now();
-    console.log(`SLM: Training completed in ${(endTime - startTime).toFixed(2)}ms`);
-    return history;
-  }
-
-  predict(input) {
-    console.log('SLM: Making prediction, input shape:', input.shape);
-    const startTime = performance.now();
-    
-    const result = this.model.predict(input);
-    
-    const endTime = performance.now();
-    console.log(`SLM: Prediction completed in ${(endTime - startTime).toFixed(2)}ms`);
-    return result;
-  }
-}
-
-// SLM Training Visualization
+// --- Training Visualization ---
 let slmTrainingChart = null;
 let slmLossData = [];
 let slmAnimationFrame = null;
-let slmGenerationVisualization = null;
 
-function initSLMVisualization() {
-  console.log('SLM: Initializing SLM visualization');
-  const startTime = performance.now();
-  
-  const container = document.getElementById('slm-vis');
-  if (!container) {
-    console.error('SLM: Container #slm-vis not found');
+function initSLMTrainingVisualization() {
+  console.log('initSLMTrainingVisualization called');
+  const visContainer = document.getElementById('slm-vis');
+  if (!visContainer) {
+    console.error('slm-vis container not found');
     return;
   }
-
-  // Remove existing SLM visualization
-  const existingSLM = container.querySelector('.slm-viz-container');
-  if (existingSLM) {
-    console.log('SLM: Removing existing SLM visualization');
-    existingSLM.remove();
-  }
-
-  console.log('SLM: Creating SLM visualization section');
-  // Create SLM visualization section
-  const slmVizSection = document.createElement('div');
-  slmVizSection.className = 'slm-viz-container';
-  slmVizSection.innerHTML = `
-    <h3>Small Language Model (SLM) Training</h3>
-    
-    <!-- Training Controls -->
-    <div class="slm-controls">
-      <div class="input-group">
-        <label for="slm-training-text">Training Text:</label>
-        <textarea id="slm-training-text" rows="4" placeholder="Enter training text for the SLM...">Roses are red, Violets are blue, I love Hack Club and so should you! This is a simple test for our small language model. We will train it on this text and see how it learns patterns.</textarea>
-      </div>
-      
-      <div class="slm-params">
-        <div class="param-group">
-          <label for="slm-epochs">Epochs:</label>
-          <input type="number" id="slm-epochs" value="10" min="1" max="50">
-        </div>
-        <div class="param-group">
-          <label for="slm-layers">Layers:</label>
-          <input type="number" id="slm-layers" value="1" min="1" max="2">
-        </div>
-        <div class="param-group">
-          <label for="slm-embedding">Embedding Dim:</label>
-          <input type="number" id="slm-embedding" value="32" min="16" max="64">
-        </div>
-      </div>
-      
-      <div class="button-group">
-        <button id="slm-train-btn" class="train-btn">Train SLM</button>
-      </div>
-      
-      <div id="slm-train-status" class="train-status">Ready to train</div>
-    </div>
-    
-    <!-- Training Visualization -->
-    <div class="slm-training-viz">
-      <div class="training-chart-container">
+  
+  // Clear previous visualization
+  visContainer.innerHTML = `
+    <div class="training-viz-container">
+      <h3>Real-Time Training Progress</h3>
+      <div class="chart-container">
         <canvas id="slm-training-chart" width="700" height="400"></canvas>
         <div class="chart-overlay">
           <div class="metric-display">
@@ -335,67 +49,17 @@ function initSLMVisualization() {
         <div id="slm-progress-text" class="progress-text">Ready to train...</div>
       </div>
     </div>
-    
-    <!-- Tokenizer Visualization -->
-    <div class="slm-tokenizer-viz">
-      <h4>Tokenizer Analysis</h4>
-      <div class="tokenizer-info">
-        <div class="tokenizer-stats">
-          <div class="stat-item">
-            <span class="stat-label">Vocabulary Size:</span>
-            <span id="slm-vocab-size" class="stat-value">0</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Special Tokens:</span>
-            <span id="slm-special-tokens" class="stat-value">0</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Unique Characters:</span>
-            <span id="slm-unique-chars" class="stat-value">0</span>
-          </div>
-        </div>
-        <div class="tokenizer-preview">
-          <label>Sample Tokenization:</label>
-          <div id="slm-tokenization-preview" class="tokenization-display"></div>
-        </div>
-      </div>
-    </div>
   `;
-
-  container.appendChild(slmVizSection);
-  console.log('SLM: Visualization section added to container');
-
-  // Add event listeners
-  console.log('SLM: Adding event listeners');
-  const trainBtn = document.getElementById('slm-train-btn');
-
-  if (trainBtn) {
-    trainBtn.onclick = () => {
-      console.log('SLM: Train button clicked');
-      trainSLM();
-    };
-  } else {
-    console.error('SLM: Train button not found');
-  }
-
-  // Initialize training chart
-  console.log('SLM: Initializing training chart');
-  initSLMTrainingChart();
   
-  const endTime = performance.now();
-  console.log(`SLM: Visualization initialization completed in ${(endTime - startTime).toFixed(2)}ms`);
-}
-
-function initSLMTrainingChart() {
   const canvas = document.getElementById('slm-training-chart');
   if (!canvas) {
-    console.error('SLM: training-chart canvas not found');
+    console.error('slm-training-chart canvas not found');
     return;
   }
   
   const ctx = canvas.getContext('2d');
   if (!ctx) {
-    console.error('SLM: Could not get canvas context');
+    console.error('Could not get canvas context');
     return;
   }
   
@@ -460,7 +124,7 @@ function initSLMTrainingChart() {
 
 function updateSLMTrainingVisualization(epoch, loss) {
   if (!slmTrainingChart) {
-    console.error('SLM: slmTrainingChart not initialized');
+    console.error('slmTrainingChart not initialized');
     return;
   }
   
@@ -531,20 +195,17 @@ function updateSLMTrainingVisualization(epoch, loss) {
       ctx.arc(x, y, pulseSize, 0, 2 * Math.PI);
       ctx.fill();
     }
-    
-    // Update metrics display
-    updateSLMMetricsDisplay(epoch, loss, minLoss);
   });
 }
 
 function updateSLMMetricsDisplay(epoch, loss, minLoss) {
-  const currentLossEl = document.getElementById('slm-current-loss');
-  const currentEpochEl = document.getElementById('slm-current-epoch');
-  const bestLossEl = document.getElementById('slm-best-loss');
+  const currentLoss = document.getElementById('slm-current-loss');
+  const currentEpoch = document.getElementById('slm-current-epoch');
+  const bestLoss = document.getElementById('slm-best-loss');
   
-  if (currentLossEl) currentLossEl.textContent = loss.toFixed(4);
-  if (currentEpochEl) currentEpochEl.textContent = epoch;
-  if (bestLossEl) bestLossEl.textContent = minLoss.toFixed(4);
+  if (currentLoss) currentLoss.textContent = loss.toFixed(4);
+  if (currentEpoch) currentEpoch.textContent = epoch;
+  if (bestLoss) bestLoss.textContent = minLoss.toFixed(4);
 }
 
 function updateSLMProgressBar(currentEpoch, totalEpochs) {
@@ -552,429 +213,255 @@ function updateSLMProgressBar(currentEpoch, totalEpochs) {
   const progressText = document.getElementById('slm-progress-text');
   
   if (progressFill) {
-    const progress = (currentEpoch / totalEpochs) * 100;
-    progressFill.style.width = `${progress}%`;
+    const percentage = (currentEpoch / totalEpochs) * 100;
+    progressFill.style.width = `${percentage}%`;
   }
   
   if (progressText) {
-    progressText.textContent = `Training... Epoch ${currentEpoch}/${totalEpochs}`;
+    progressText.textContent = `Training: ${currentEpoch}/${totalEpochs} (${Math.round((currentEpoch / totalEpochs) * 100)}%)`;
   }
 }
 
-// Function to update tokenizer visualization
-function updateTokenizerViz(tokenizer, sampleText = "Hello world!") {
-  console.log('SLM: Updating tokenizer visualization');
-  
-  if (!tokenizer) return;
-  
-  // Update stats
-  const vocabSizeEl = document.getElementById('slm-vocab-size');
-  const specialTokensEl = document.getElementById('slm-special-tokens');
-  const uniqueCharsEl = document.getElementById('slm-unique-chars');
-  
-  if (vocabSizeEl) vocabSizeEl.textContent = Object.keys(tokenizer.charToId).length;
-  if (specialTokensEl) specialTokensEl.textContent = Object.keys(tokenizer.specialTokens).length;
-  if (uniqueCharsEl) uniqueCharsEl.textContent = Object.keys(tokenizer.charToId).length - Object.keys(tokenizer.specialTokens).length;
-  
-  // Show sample tokenization
-  const previewEl = document.getElementById('slm-tokenization-preview');
-  if (previewEl) {
-    try {
-      const tokens = tokenizer.encode(sampleText);
-      const decoded = tokenizer.decode(tokens);
-      
-      previewEl.innerHTML = `
-        <div class="tokenization-item">
-          <strong>Input:</strong> "${sampleText}"
-        </div>
-        <div class="tokenization-item">
-          <strong>Tokens:</strong> [${tokens.join(', ')}]
-        </div>
-        <div class="tokenization-item">
-          <strong>Decoded:</strong> "${decoded}"
-        </div>
-      `;
-    } catch (error) {
-      previewEl.innerHTML = `<div class="error">Error tokenizing sample text</div>`;
-    }
-  }
-}
+// Add global to store memory states and attention weights during SLM generation
+let slmMemoryStates = [];
+let slmAttentionWeights = [];
 
-async function trainSLM() {
-  console.log('SLM: trainSLM function called');
-  const startTime = performance.now();
-  
-  // Check and configure backend
-  try {
-    const currentBackend = tf.getBackend();
-    console.log('SLM: Current backend:', currentBackend);
-    
-    // If WASM backend is causing issues, fallback to CPU
-    if (currentBackend === 'wasm') {
-      console.log('SLM: WASM backend detected, switching to CPU for stability');
-      await tf.setBackend('cpu');
-    }
-    
-    // Ensure we have a working backend
-    if (!tf.getBackend()) {
-      console.log('SLM: No backend detected, setting CPU backend');
-      await tf.setBackend('cpu');
-    }
-    
-    console.log('SLM: Using backend:', tf.getBackend());
-  } catch (error) {
-    console.error('SLM: Backend configuration error:', error);
-    // Continue with whatever backend is available
-  }
-  
-  const trainText = document.getElementById('slm-train-text').value;
-  const epochs = parseInt(document.getElementById('slm-epochs').value);
-  const batchSize = parseInt(document.getElementById('slm-batch-size').value);
-  const seqLength = parseInt(document.getElementById('slm-seq-length').value);
+// --- SLM Model Functions ---
 
-  console.log('SLM: Training parameters - text length:', trainText.length, 'epochs:', epochs, 'batchSize:', batchSize, 'seqLength:', seqLength);
-
-  if (!trainText || trainText.length < 50) {
-    showPopupAlert('Please enter more training text (at least 50 characters)');
-    return;
-  }
-
-  try {
-    // Update status
-    const status = document.getElementById('slm-status');
-    if (status) {
-      status.textContent = 'Preparing data...';
-    }
-    
-    console.log('SLM: Initializing tokenizer');
-    const tokenizerStartTime = performance.now();
-    
-    // Initialize tokenizer and build vocabulary
-    slmTokenizer = new SimpleTokenizer(SLM_CONFIG.vocabSize);
-    slmTokenizer.buildVocab(trainText);
-    
-    // Update tokenizer visualization
-    updateTokenizerViz(slmTokenizer, trainText.substring(0, 50) + "...");
-    
-    const tokenizerEndTime = performance.now();
-    console.log(`SLM: Tokenizer initialization completed in ${(tokenizerEndTime - tokenizerStartTime).toFixed(2)}ms`);
-
-    console.log('SLM: Preparing training data');
-    const dataPrepStartTime = performance.now();
-    
-    // Prepare training data
-    const sequences = prepareSLMSequences(trainText, slmTokenizer);
-    const { xs, ys } = vectorizeSLMData(sequences, slmTokenizer);
-    
-    const dataPrepEndTime = performance.now();
-    console.log(`SLM: Data preparation completed in ${(dataPrepEndTime - dataPrepStartTime).toFixed(2)}ms`);
-
-    console.log('SLM: Creating model');
-    const modelStartTime = performance.now();
-    
-    // Update SLM_CONFIG with new parameters
-    SLM_CONFIG.maxLength = seqLength;
-    SLM_CONFIG.batchSize = batchSize;
-    
-    // Create and train model
-    slmModel = new SLMModel(SLM_CONFIG);
-    
-    const modelEndTime = performance.now();
-    console.log(`SLM: Model creation completed in ${(modelEndTime - modelStartTime).toFixed(2)}ms`);
-
-    // Set global variables
-    window.slmModel = slmModel;
-    window.slmTokenizer = slmTokenizer;
-    window.slmTotalEpochs = epochs;
-
-    // Initialize training visualization
-    slmTrainingHistory = [];
-    // initSLMTrainingChart(); // This is now handled by initSLMVisualization
-
-    // Training callbacks
-    const callbacks = {
-      onEpochEnd: (epoch, logs) => {
-        const loss = logs.loss;
-        const accuracy = logs.accuracy || 0;
-        
-        slmTrainingHistory.push({ epoch: epoch + 1, loss, accuracy });
-        updateSLMTrainingVisualization(epoch + 1, loss);
-        
-        console.log(`SLM Epoch ${epoch + 1}/${epochs} - Loss: ${loss.toFixed(4)}, Accuracy: ${(accuracy * 100).toFixed(2)}%`);
-        
-        // Force tensor cleanup after each epoch to prevent memory buildup
-        if (epoch % 5 === 0) {
-          console.log('SLM: Running tensor cleanup after epoch', epoch + 1);
-          tf.tidy(() => {
-            // This will clean up any tensors created during the epoch
-          });
-        }
-      }
+// Simple tokenizer for SLM
+class SimpleTokenizer {
+  constructor(vocabSize = 50) {
+    this.vocabSize = vocabSize;
+    this.charToId = {};
+    this.idToChar = {};
+    this.specialTokens = {
+      '[PAD]': 0,
+      '[UNK]': 1,
+      '[BOS]': 2,
+      '[EOS]': 3
     };
-
-    console.log('SLM: Starting model training');
-    const trainingStartTime = performance.now();
-    
-    // Train the model
-    await slmModel.train({ xs, ys }, epochs, callbacks);
-    
-    const trainingEndTime = performance.now();
-    console.log(`SLM: Model training completed in ${(trainingEndTime - trainingStartTime).toFixed(2)}ms`);
-
-    // Enable generation
-    if (status) {
-      status.textContent = 'Training completed! Initializing generation interface...';
-      status.style.color = '#28a745';
-    }
-    
-    // Initialize generation visualization
-    console.log('SLM: Initializing generation visualization');
-    initSLMGenerationVisualization();
-    
-    // Update status after generation interface is ready
-    setTimeout(() => {
-      if (status) {
-        status.textContent = 'Training completed! Use the generation controls below to generate text.';
-      }
-    }, 1000);
-
-    const totalTime = performance.now() - startTime;
-    console.log(`SLM: Total training process completed in ${totalTime.toFixed(2)}ms`);
-    showPopupAlert('SLM training completed! You can now generate text.');
-
-  } catch (error) {
-    console.error('SLM training error:', error);
-    
-    // Provide specific error messages for common issues
-    if (error.message.includes('WASM') || error.message.includes('wasm')) {
-      showPopupAlert('SLM training failed: WebAssembly loading issue. Please refresh the page and try again.');
-    } else if (error.message.includes('backend')) {
-      showPopupAlert('SLM training failed: TensorFlow.js backend issue. Please refresh the page and try again.');
-    } else {
-      showPopupAlert('SLM training failed: ' + error.message);
-    }
   }
-}
 
-function prepareSLMSequences(text, tokenizer) {
-  console.log('SLM: Preparing sequences for text length:', text.length);
-  const startTime = performance.now();
-  
-  const sequences = [];
-  const maxLength = SLM_CONFIG.maxLength;
-  
-  console.log('SLM: Creating overlapping sequences with maxLength:', maxLength);
-  
-  // Create overlapping sequences
-  for (let i = 0; i < text.length - maxLength; i++) {
-    const sequence = text.slice(i, i + maxLength);
-    const nextChar = text[i + maxLength];
+  buildVocab(text) {
+    const chars = new Set(text.split(''));
+    const sortedChars = Array.from(chars).sort();
     
-    sequences.push({
-      input: sequence,
-      target: nextChar
+    // Add special tokens
+    Object.entries(this.specialTokens).forEach(([token, id]) => {
+      this.charToId[token] = id;
+      this.idToChar[id] = token;
+    });
+    
+    // Add regular characters (limit to prevent large vocab)
+    const maxRegularChars = this.vocabSize - Object.keys(this.specialTokens).length;
+    sortedChars.slice(0, maxRegularChars).forEach((char, index) => {
+      const id = index + Object.keys(this.specialTokens).length;
+      this.charToId[char] = id;
+      this.idToChar[id] = char;
     });
   }
+
+  encode(text) {
+    const tokens = text.split('').map(char => 
+      this.charToId[char] || this.charToId['[UNK]']
+    );
+    return [this.charToId['[BOS]'], ...tokens, this.charToId['[EOS]']];
+  }
+
+  decode(ids) {
+    return ids.map(id => this.idToChar[id] || '[UNK]').join('');
+  }
+}
+
+// Create SLM model
+function createSLMModel(seqLength, vocabSize) {
+  console.log('Creating SLM model with seqLength:', seqLength, 'vocabSize:', vocabSize);
   
-  const endTime = performance.now();
-  console.log(`SLM: Sequence preparation completed in ${(endTime - startTime).toFixed(2)}ms, created ${sequences.length} sequences`);
+  const input = tf.input({shape: [seqLength]});
+  const embed = tf.layers.embedding({
+    inputDim: vocabSize,
+    outputDim: 32,
+    inputLength: seqLength,
+    maskZero: true
+  }).apply(input);
+  // LSTM layer (return sequences for attention)
+  const lstm = tf.layers.lstm({
+    units: 32,
+    returnSequences: true,
+    dropout: 0.1
+  }).apply(embed);
+  // Self-attention: query=key=value=lstm output
+  // Attention weights: softmax(QK^T/sqrt(d))
+  const permute = tf.layers.permute({dims: [2, 1]}).apply(lstm); // [batch, 32, seq]
+  const attentionScores = tf.layers.dot({axes: [2, 1]}).apply([lstm, permute]); // [batch, seq, seq]
+  const attentionWeights = tf.layers.activation({activation: 'softmax'}).apply(attentionScores); // [batch, seq, seq]
+  const attended = tf.layers.dot({axes: [2, 1]}).apply([attentionWeights, lstm]); // [batch, seq, 32]
+  const flat = tf.layers.flatten().apply(attended);
+  const dense = tf.layers.dense({units: 32, activation: 'relu'}).apply(flat);
+  const output = tf.layers.dense({units: vocabSize, activation: 'softmax'}).apply(dense);
+  const model = tf.model({inputs: input, outputs: [output, attentionWeights]});
+  model.compile({
+    optimizer: tf.train.adam(0.001),
+    loss: 'sparseCategoricalCrossentropy',
+    metrics: ['accuracy']
+  });
+  return model;
+}
+
+// Prepare sequences for training
+function prepareSLMSequences(text, tokenizer, seqLength) {
+  const tokens = tokenizer.encode(text);
+  const sequences = [];
+  
+  for (let i = 0; i <= tokens.length - seqLength - 1; i++) {
+    const sequence = tokens.slice(i, i + seqLength);
+    const nextToken = tokens[i + seqLength];
+    sequences.push({ input: sequence, label: nextToken });
+  }
+  
   return sequences;
 }
 
+// Vectorize data for training
 function vectorizeSLMData(sequences, tokenizer) {
-  console.log('SLM: Vectorizing data for', sequences.length, 'sequences');
-  const startTime = performance.now();
+  const xs = tf.buffer([sequences.length, sequences[0].input.length]);
+  const ys = tf.buffer([sequences.length]);
   
-  // Limit sequences to prevent memory issues
-  const maxSequences = 500;
-  if (sequences.length > maxSequences) {
-    sequences = sequences.slice(0, maxSequences);
-    console.log(`SLM: Limited sequences to ${maxSequences} to prevent memory issues`);
-  }
-  
-  const xs = [];
-  const ys = [];
-  
-  console.log('SLM: Processing sequences');
-  sequences.forEach((seq, index) => {
-    if (index % 100 === 0) {
-      console.log(`SLM: Processing sequence ${index}/${sequences.length}`);
-    }
-    
-    const inputIds = tokenizer.encode(seq.input);
-    const targetId = tokenizer.encode(seq.target)[1]; // Skip BOS token
-    
-    // Ensure inputIds doesn't exceed maxLength
-    if (inputIds.length > SLM_CONFIG.maxLength) {
-      inputIds.splice(SLM_CONFIG.maxLength);
-    }
-    
-    // Pad or truncate to maxLength
-    while (inputIds.length < SLM_CONFIG.maxLength) {
-      inputIds.push(tokenizer.charToId['[PAD]'] || 0);
-    }
-    
-    xs.push(inputIds);
-    ys.push(targetId);
+  sequences.forEach((seq, i) => {
+    // Input sequence
+    seq.input.forEach((token, t) => {
+      xs.set(token, i, t);
+    });
+    // Output (next token)
+    ys.set(seq.label, i);
   });
   
-  // Check tensor size before creating
-  const totalElements = xs.length * xs[0].length;
-  console.log('SLM: Tensor size check - total elements:', totalElements);
-  
-  if (totalElements > 10000) {
-    throw new Error(`Tensor too large (${totalElements} elements). Use shorter text or reduce sequence length.`);
-  }
-  
-  console.log('SLM: Creating tensors');
-  const tensorStartTime = performance.now();
-  
-  // Use tf.tidy to automatically clean up tensors
-  const result = tf.tidy(() => {
-    return {
-      xs: tf.tensor2d(xs),
-      ys: tf.tensor1d(ys)
-    };
-  });
-  
-  const tensorEndTime = performance.now();
-  console.log(`SLM: Tensor creation completed in ${(tensorEndTime - tensorStartTime).toFixed(2)}ms`);
-  
-  const endTime = performance.now();
-  console.log(`SLM: Vectorization completed in ${(endTime - startTime).toFixed(2)}ms`);
-  return result;
+  return { xs: xs.toTensor(), ys: ys.toTensor() };
 }
 
+// Train SLM model
+async function trainSLMModel(model, xs, ys, epochs, batchSize, statusCallback) {
+  console.log('Starting SLM training with epochs:', epochs, 'batchSize:', batchSize);
+  
+  let minLoss = Infinity;
+  
+  for (let epoch = 1; epoch <= epochs; epoch++) {
+    const result = await model.fit(xs, ys, {
+      epochs: 1,
+      batchSize: batchSize,
+      verbose: 0
+    });
+    
+    const loss = result.history.loss[0];
+    minLoss = Math.min(minLoss, loss);
+    
+    if (statusCallback) {
+      statusCallback(epoch, loss, minLoss, 0.001);
+    }
+    
+    // Small delay to allow UI updates
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  
+  return { model, minLoss };
+}
+
+// Generate text with SLM
 async function generateSLMText(model, seedText, tokenizer, length = 50, temperature = 0.8) {
-  console.log('SLM: generateSLMText function called');
-  const startTime = performance.now();
+  let currentTokens = tokenizer.encode(seedText);
+  const generated = [];
   
-  if (!model || !tokenizer) {
-    console.error('SLM: Model or tokenizer not available');
-    return null;
-  }
-
-  console.log('SLM: Generation parameters - seed length:', seedText.length, 'length:', length, 'temperature:', temperature);
-
-  if (!seedText) {
-    console.error('SLM: No seed text provided');
-    return null;
-  }
-
-  try {
-    let generatedText = seedText;
-    let currentSequence = seedText;
-
-    console.log('SLM: Starting text generation');
+  for (let i = 0; i < length; i++) {
+    // Get the last sequenceLength tokens
+    const inputTokens = currentTokens.slice(-model.inputs[0].shape[1]);
     
-    for (let i = 0; i < length; i++) {
-      if (i % 10 === 0) {
-        console.log(`SLM: Generating character ${i + 1}/${length}`);
-      }
-      
-      // Prepare input
-      const inputIds = tokenizer.encode(currentSequence);
-      const inputTensor = tf.tensor2d([inputIds], [1, inputIds.length]);
-
-      // Predict next token
-      const predictions = model.predict(inputTensor);
-      const nextId = sampleWithTemperature(predictions.dataSync(), temperature);
-      const nextChar = tokenizer.idToChar[nextId] || ' ';
-
-      // Update sequence
-      generatedText += nextChar;
-      currentSequence = generatedText.slice(-SLM_CONFIG.maxLength);
-
-      // Clean up tensor
-      tf.dispose(inputTensor);
-      tf.dispose(predictions);
+    // Pad if necessary
+    while (inputTokens.length < model.inputs[0].shape[1]) {
+      inputTokens.unshift(tokenizer.charToId['[PAD]']);
     }
-
-    const endTime = performance.now();
-    console.log(`SLM: Text generation completed in ${(endTime - startTime).toFixed(2)}ms`);
     
-    return generatedText;
-
-  } catch (error) {
-    console.error('SLM generation error:', error);
-    return null;
+    // Predict next token
+    const input = tf.tensor2d([inputTokens], [1, model.inputs[0].shape[1]]);
+    const prediction = model.predict(input);
+    const nextToken = sampleWithTemperature(prediction, temperature);
+    
+    generated.push(nextToken);
+    currentTokens.push(nextToken);
+    
+    input.dispose();
+    prediction.dispose();
   }
+  
+  return tokenizer.decode(generated);
 }
 
-// Helper function for temperature sampling
+// Sample with temperature
 function sampleWithTemperature(logits, temperature) {
-  console.log('SLM: Sampling with temperature:', temperature, 'logits length:', logits.length);
-  const startTime = performance.now();
+  const probs = tf.softmax(tf.div(logits, temperature));
+  const probsArray = probs.arraySync()[0];
+  const cumulativeProbs = [];
+  let sum = 0;
   
-  const logitsArray = Array.from(logits);
-  const scaledLogits = logitsArray.map(logit => logit / temperature);
-  const maxLogit = Math.max(...scaledLogits);
-  const expLogits = scaledLogits.map(logit => Math.exp(logit - maxLogit));
-  const sumExpLogits = expLogits.reduce((sum, exp) => sum + exp, 0);
-  const probabilities = expLogits.map(exp => exp / sumExpLogits);
+  for (let i = 0; i < probsArray.length; i++) {
+    sum += probsArray[i];
+    cumulativeProbs.push(sum);
+  }
   
-  // Sample from the distribution
   const random = Math.random();
-  let cumulative = 0;
-  for (let i = 0; i < probabilities.length; i++) {
-    cumulative += probabilities[i];
-    if (random <= cumulative) {
-      const endTime = performance.now();
-      console.log(`SLM: Sampling completed in ${(endTime - startTime).toFixed(2)}ms, selected index:`, i);
+  for (let i = 0; i < cumulativeProbs.length; i++) {
+    if (random <= cumulativeProbs[i]) {
       return i;
     }
   }
   
-  const endTime = performance.now();
-  console.log(`SLM: Sampling completed in ${(endTime - startTime).toFixed(2)}ms, fallback index:`, probabilities.length - 1);
-  return probabilities.length - 1;
+  return probsArray.length - 1;
 }
 
-// Expose functions to global scope
-window.initSLMVisualization = initSLMVisualization;
-window.trainSLM = trainSLM;
-window.generateSLMText = generateSLMText;
-window.generateSLMNextCharacter = generateSLMNextCharacter;
+// --- Generation Visualization ---
+let slmGenerationInterval = null;
+let slmGeneratedText = '';
+let slmSeedText = '';
+let slmGenerationModel = null;
+let slmGenerationTokenizer = null;
 
-// Initialize SLM visualization when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-  // SLM option is already in HTML, no need to add it here
-});
-
-console.log('SLM: Script loading completed successfully'); 
-
-// SLM Generation Visualization
 function initSLMGenerationVisualization() {
+  console.log('initSLMGenerationVisualization called');
   const visContainer = document.getElementById('slm-vis');
-  if (!visContainer) return;
+  if (!visContainer) {
+    console.error('slm-vis container not found');
+    return;
+  }
   
   // Remove any existing generation visualization
-  const existingGenViz = visContainer.querySelector('.slm-generation-viz-container');
+  const existingGenViz = visContainer.querySelector('.generation-viz-container');
   if (existingGenViz) {
     existingGenViz.remove();
   }
   
+  // Get default seed text from HTML if present
+  const defaultSeed = document.getElementById('slm-default-seed')?.value || "I love Shipwrecked reviewers <3";
+  
   // Add generation visualization section
   const genVizSection = document.createElement('div');
-  genVizSection.className = 'slm-generation-viz-container';
+  genVizSection.className = 'generation-viz-container';
   genVizSection.innerHTML = `
-    <h3>Real-Time SLM Text Generation</h3>
+    <h3>Real-Time Text Generation</h3>
     <div class="generation-controls">
       <div class="input-group">
-        <label for="slm-generation-seed">Seed Text:</label>
-        <input type="text" id="slm-generation-seed" placeholder="Roses are" value="Roses are" style="width: 300px;">
+        <label for="slm-seed-text">Seed Text:</label>
+        <input type="text" id="slm-seed-text" value="${defaultSeed}" placeholder="Enter seed text..." style="width: 300px;">
       </div>
       <div class="input-group">
-        <label for="slm-generation-length">Length:</label>
-        <input type="number" id="slm-generation-length" value="50" min="10" max="200">
+        <label for="slm-gen-length">Length:</label>
+        <input type="number" id="slm-gen-length" value="50" min="10" max="200">
       </div>
       <div class="input-group">
-        <label for="slm-generation-temp">Temperature:</label>
-        <input type="number" id="slm-generation-temp" value="0.8" min="0.1" max="2" step="0.1">
+        <label for="slm-temperature">Temperature:</label>
+        <input type="number" id="slm-temperature" value="0.8" min="0.1" max="2.0" step="0.1">
       </div>
       <div class="input-group">
-        <label for="slm-generation-speed">Speed:</label>
-        <input type="range" id="slm-generation-speed" min="50" max="500" value="200">
+        <label for="slm-speed">Speed:</label>
+        <input type="range" id="slm-speed" min="50" max="500" value="200" step="50">
         <span id="slm-speed-value">200ms</span>
       </div>
     </div>
@@ -983,207 +470,306 @@ function initSLMGenerationVisualization() {
         <label>Seed Text:</label>
         <div id="slm-seed-display" class="seed-display"></div>
       </div>
-      <div class="generation-container">
+      <div class="generated-text-container">
         <label>Generated Text:</label>
-        <div id="slm-generation-display" class="generation-display"></div>
+        <div id="slm-generated-display" class="generated-text"></div>
       </div>
-      <div class="prediction-container">
+      <div class="next-char-container">
         <label>Next Character Prediction:</label>
-        <div id="slm-prediction-display" class="prediction-display"></div>
+        <div id="slm-next-char-display" class="next-char-display"></div>
       </div>
     </div>
-    <div class="generation-controls">
-      <button id="slm-start-generation" class="gen-btn">Start Generation</button>
-      <button id="slm-pause-generation" class="gen-btn" disabled>Pause</button>
-      <button id="slm-reset-generation" class="gen-btn">Reset</button>
+    <div class="generation-buttons">
+      <button id="slm-start-gen" class="gen-btn">Start Generation</button>
+      <button id="slm-pause-gen" class="gen-btn" disabled>Pause</button>
+      <button id="slm-reset-gen" class="gen-btn">Reset</button>
+    </div>
+    <div style="margin-top:2em;">
+      <label><b>SLM Memory State (Hidden State) Heatmap</b></label>
+      <canvas id="slm-memory-heatmap" width="400" height="120"></canvas>
+    </div>
+    <div style="margin-top:2em;">
+      <label><b>SLM Attention Map</b></label>
+      <canvas id="slm-attention-map" width="400" height="120"></canvas>
     </div>
   `;
   
   visContainer.appendChild(genVizSection);
   
   // Add event listeners
-  const startBtn = document.getElementById('slm-start-generation');
-  const pauseBtn = document.getElementById('slm-pause-generation');
-  const resetBtn = document.getElementById('slm-reset-generation');
-  const speedSlider = document.getElementById('slm-generation-speed');
+  const startBtn = document.getElementById('slm-start-gen');
+  const pauseBtn = document.getElementById('slm-pause-gen');
+  const resetBtn = document.getElementById('slm-reset-gen');
+  const speedSlider = document.getElementById('slm-speed');
   const speedValue = document.getElementById('slm-speed-value');
   
-  if (startBtn) {
-    startBtn.onclick = () => startSLMGenerationVisualization();
-  }
-  if (pauseBtn) {
-    pauseBtn.onclick = () => pauseSLMGenerationVisualization();
-  }
-  if (resetBtn) {
-    resetBtn.onclick = () => resetSLMGenerationVisualization();
-  }
-  if (speedSlider) {
-    speedSlider.oninput = (e) => {
-      speedValue.textContent = e.target.value + 'ms';
-      if (slmGenerationVisualization) {
-        slmGenerationVisualization.speed = parseInt(e.target.value);
-      }
+  if (startBtn) startBtn.onclick = startSLMGeneration;
+  if (pauseBtn) pauseBtn.onclick = pauseSLMGeneration;
+  if (resetBtn) resetBtn.onclick = resetSLMGeneration;
+  if (speedSlider && speedValue) {
+    speedSlider.oninput = () => {
+      speedValue.textContent = speedSlider.value + 'ms';
     };
   }
   
-  slmGenerationVisualization = {
-    isGenerating: false,
-    speed: 200,
-    currentText: '',
-    seedText: '',
-    timer: null
-  };
+  // Test that the seed input is working
+  const seedInput = document.getElementById('slm-seed-text');
+  if (seedInput) {
+    console.log('SLM seed input found and editable');
+    seedInput.addEventListener('input', (e) => {
+      console.log('SLM seed text changed to:', e.target.value);
+    });
+  } else {
+    console.error('SLM seed input not found!');
+  }
 }
 
-function startSLMGenerationVisualization() {
-  if (!window.slmModel || !window.slmTokenizer) {
-    showPopupAlert('Train the SLM model first!');
+function startSLMGeneration() {
+  if (!slmGenerationModel || !slmGenerationTokenizer) {
+    showPopupAlert('Please train the model first!');
     return;
   }
+  // Reset memory and attention states
+  slmMemoryStates = [];
+  slmAttentionWeights = [];
   
-  const seedInput = document.getElementById('slm-generation-seed');
-  if (!seedInput || !seedInput.value) {
-    showPopupAlert('Enter a seed text first!');
-    return;
-  }
+  const seedInput = document.getElementById('slm-seed-text');
+  const seedText = seedInput ? seedInput.value : 'I love Shipwrecked reviewers <3';
+  const length = parseInt(document.getElementById('slm-gen-length').value);
+  const temperature = parseFloat(document.getElementById('slm-temperature').value);
+  const speed = parseInt(document.getElementById('slm-speed').value);
   
-  const startBtn = document.getElementById('slm-start-generation');
-  const pauseBtn = document.getElementById('slm-pause-generation');
-  const seedDisplay = document.getElementById('slm-seed-display');
-  const generationDisplay = document.getElementById('slm-generation-display');
-  const predictionDisplay = document.getElementById('slm-prediction-display');
+  console.log('SLM Generation starting with seed text:', seedText);
   
-  if (startBtn) startBtn.disabled = true;
-  if (pauseBtn) pauseBtn.disabled = false;
+  slmSeedText = seedText;
+  slmGeneratedText = '';
   
-  slmGenerationVisualization.isGenerating = true;
-  slmGenerationVisualization.seedText = seedInput.value;
-  slmGenerationVisualization.currentText = slmGenerationVisualization.seedText;
+  // Update displays
+  document.getElementById('slm-seed-display').textContent = seedText;
+  document.getElementById('slm-generated-display').textContent = '';
+  document.getElementById('slm-next-char-display').textContent = '';
   
-  if (seedDisplay) {
-    seedDisplay.textContent = slmGenerationVisualization.seedText;
-    seedDisplay.className = 'seed-display active';
-  }
+  // Update buttons
+  document.getElementById('slm-start-gen').disabled = true;
+  document.getElementById('slm-pause-gen').disabled = false;
   
-  if (generationDisplay) {
-    generationDisplay.textContent = '';
-    generationDisplay.className = 'generation-display active';
-  }
-  
-  if (predictionDisplay) {
-    predictionDisplay.innerHTML = '';
-    predictionDisplay.className = 'prediction-display active';
-  }
-  
-  // Start generation loop
-  slmGenerationVisualization.timer = setInterval(() => {
-    if (!slmGenerationVisualization.isGenerating) return;
-    
+  // Start generation
+  slmGenerationInterval = setInterval(() => {
     generateSLMNextCharacter();
-  }, slmGenerationVisualization.speed);
+  }, speed);
 }
 
-function pauseSLMGenerationVisualization() {
-  slmGenerationVisualization.isGenerating = false;
-  
-  const startBtn = document.getElementById('slm-start-generation');
-  const pauseBtn = document.getElementById('slm-pause-generation');
-  
-  if (startBtn) startBtn.disabled = false;
-  if (pauseBtn) pauseBtn.disabled = true;
-  
-  if (slmGenerationVisualization.timer) {
-    clearInterval(slmGenerationVisualization.timer);
+function pauseSLMGeneration() {
+  if (slmGenerationInterval) {
+    clearInterval(slmGenerationInterval);
+    slmGenerationInterval = null;
   }
+  
+  document.getElementById('slm-start-gen').disabled = false;
+  document.getElementById('slm-pause-gen').disabled = true;
 }
 
-function resetSLMGenerationVisualization() {
-  pauseSLMGenerationVisualization();
+function resetSLMGeneration() {
+  pauseSLMGeneration();
   
-  const seedDisplay = document.getElementById('slm-seed-display');
-  const generationDisplay = document.getElementById('slm-generation-display');
-  const predictionDisplay = document.getElementById('slm-prediction-display');
+  slmGeneratedText = '';
+  slmMemoryStates = [];
+  slmAttentionWeights = [];
+  document.getElementById('slm-generated-display').textContent = '';
+  document.getElementById('slm-next-char-display').textContent = '';
   
-  if (seedDisplay) {
-    seedDisplay.textContent = '';
-    seedDisplay.className = 'seed-display';
-  }
-  
-  if (generationDisplay) {
-    generationDisplay.textContent = '';
-    generationDisplay.className = 'generation-display';
-  }
-  
-  if (predictionDisplay) {
-    predictionDisplay.innerHTML = '';
-    predictionDisplay.className = 'prediction-display';
-  }
-  
-  slmGenerationVisualization.currentText = '';
-  slmGenerationVisualization.seedText = '';
+  document.getElementById('slm-start-gen').disabled = false;
+  document.getElementById('slm-pause-gen').disabled = true;
+  drawSLMMemoryHeatmap([]);
+  drawSLMAttentionMap([]);
 }
 
 async function generateSLMNextCharacter() {
-  console.log('SLM: generateSLMNextCharacter called');
-  
-  if (!window.slmModel || !window.slmTokenizer) {
-    console.error('SLM: Model or tokenizer not available');
-    return;
-  }
-  
+  if (!slmGenerationModel || !slmGenerationTokenizer) return;
+  const temperature = parseFloat(document.getElementById('slm-temperature').value);
   try {
-    // Get current sequence
-    const currentText = slmGenerationVisualization.currentText;
-    const maxLength = parseInt(document.getElementById('slm-generation-length')?.value || 50);
-    const temperature = parseFloat(document.getElementById('slm-generation-temp')?.value || 0.8);
-    
-    if (currentText.length >= maxLength) {
-      pauseSLMGenerationVisualization();
-      return;
+    // Get current context
+    const currentText = slmSeedText + slmGeneratedText;
+    const tokens = slmGenerationTokenizer.encode(currentText);
+    const seqLength = slmGenerationModel.inputs[0].shape[1];
+    const inputTokens = tokens.slice(-seqLength);
+    while (inputTokens.length < seqLength) {
+      inputTokens.unshift(slmGenerationTokenizer.charToId['[PAD]']);
     }
-    
-    // Generate next character using the updated function
-    const nextChar = await generateSLMText(window.slmModel, currentText, window.slmTokenizer, 1, temperature);
-    
-    if (nextChar && nextChar.length > currentText.length) {
-      // Extract just the next character
-      const newChar = nextChar.slice(currentText.length);
-      
-      // Update current text
-      slmGenerationVisualization.currentText += newChar;
-      
-      // Update displays
-      updateSLMGenerationDisplays(newChar);
-      
-      // Update generation display
-      const generationDisplay = document.getElementById('slm-generation-display');
-      if (generationDisplay) {
-        generationDisplay.textContent = slmGenerationVisualization.currentText.slice(slmGenerationVisualization.seedText.length);
+    // Predict next token and attention
+    const input = tf.tensor2d([inputTokens], [1, seqLength]);
+    const [prediction, attention] = slmGenerationModel.predict(input);
+    const nextToken = sampleWithTemperature(prediction, temperature);
+    // Try to get the hidden state from the LSTM layer
+    if (slmGenerationModel && slmGenerationModel.layers) {
+      const lstmLayer = slmGenerationModel.layers.find(l => l.getClassName && l.getClassName() === 'LSTM');
+      if (lstmLayer && lstmLayer.states) {
+        const hidden = lstmLayer.states[0].arraySync()[0];
+        if (Array.isArray(hidden) && hidden.length > 0) {
+          slmMemoryStates.push(hidden);
+          drawSLMMemoryHeatmap(slmMemoryStates);
+        }
       }
     }
-    
+    // Store attention weights for visualization
+    if (attention && attention.arraySync) {
+      const attnArr = attention.arraySync()[0]; // [seq, seq]
+      if (Array.isArray(attnArr) && attnArr.length > 0) {
+        slmAttentionWeights.push(attnArr.map(row => Array.isArray(row) ? row : [row]));
+        drawSLMAttentionMap(slmAttentionWeights);
+      }
+    }
+    // Convert token to character
+    const nextChar = slmGenerationTokenizer.idToChar[nextToken];
+    slmGeneratedText += nextChar;
+    document.getElementById('slm-generated-display').textContent = slmGeneratedText;
+    document.getElementById('slm-next-char-display').textContent = nextChar;
+    input.dispose();
+    if (prediction.dispose) prediction.dispose();
+    if (attention && attention.dispose) attention.dispose();
   } catch (error) {
     console.error('SLM: Error generating next character:', error);
-    pauseSLMGenerationVisualization();
+    pauseSLMGeneration();
   }
 }
 
-function updateSLMGenerationDisplays(nextChar) {
-  const predictionDisplay = document.getElementById('slm-prediction-display');
+function drawSLMMemoryHeatmap(states) {
+  const canvas = document.getElementById('slm-memory-heatmap');
+  if (!canvas || !states.length || !Array.isArray(states[0])) {
+    if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+  const ctx = canvas.getContext('2d');
+  const rows = states.length;
+  const cols = states[0].length;
+  const cellWidth = canvas.width / cols;
+  const cellHeight = canvas.height / rows;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const v = states[y][x];
+      const norm = (v + 1) / 2;
+      ctx.fillStyle = `rgba(0,0,0,${norm})`;
+      ctx.fillRect(x * cellWidth, y * cellHeight, cellWidth, cellHeight);
+    }
+  }
+}
+
+function drawSLMAttentionMap(attn) {
+  const canvas = document.getElementById('slm-attention-map');
+  if (!canvas || !attn.length || !Array.isArray(attn[0])) {
+    if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+  // attn: [steps][seq][seq]
+  const ctx = canvas.getContext('2d');
+  const rows = attn.length;
+  const cols = attn[0].length;
+  const cellWidth = canvas.width / cols;
+  const cellHeight = canvas.height / rows;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      // Average attention over all heads (if multi-head)
+      let v = Array.isArray(attn[y][x]) ? attn[y][x].reduce((a, b) => a + b, 0) / attn[y][x].length : attn[y][x];
+      ctx.fillStyle = `rgba(0,0,0,${v})`;
+      ctx.fillRect(x * cellWidth, y * cellHeight, cellWidth, cellHeight);
+    }
+  }
+}
+
+// --- Main Training Function ---
+async function trainSLM() {
+  console.log('trainSLM called');
   
-  if (predictionDisplay) {
-    // Create character display without animation
-    const charSpan = document.createElement('span');
-    charSpan.textContent = nextChar;
-    charSpan.className = 'generated-char';
+  const trainText = document.getElementById('slm-train-text').value.trim();
+  const seqLength = parseInt(document.getElementById('slm-seq-length').value);
+  const epochs = parseInt(document.getElementById('slm-epochs').value);
+  const batchSize = parseInt(document.getElementById('slm-batch-size').value);
+  
+  console.log('SLM Training parameters:', { trainText: trainText.substring(0, 50) + '...', seqLength, epochs, batchSize });
+  
+  if (!trainText) {
+    showPopupAlert('Please enter training text!');
+    return;
+  }
+  
+  // Initialize visualization
+  initSLMTrainingVisualization();
+  
+  try {
+    const status = document.getElementById('slm-status');
+    status.textContent = 'Preparing data...';
+    console.log('Preparing SLM data...');
     
-    predictionDisplay.appendChild(charSpan);
+    // Create tokenizer and build vocabulary
+    const tokenizer = new SimpleTokenizer(50);
+    tokenizer.buildVocab(trainText);
+    console.log('SLM Vocabulary size:', Object.keys(tokenizer.charToId).length);
     
-    // Clear after a short delay
-    setTimeout(() => {
-      if (charSpan.parentNode) {
-        charSpan.parentNode.removeChild(charSpan);
-      }
-    }, 300);
+    // Create sequences
+    const sequences = prepareSLMSequences(trainText, tokenizer, seqLength);
+    console.log('Created', sequences.length, 'SLM sequences');
+    
+    // Check if data is too large
+    if (sequences.length > 1000) {
+      showPopupAlert('Training data too large! Please use shorter text or reduce sequence length.');
+      return;
+    }
+    
+    // Vectorize data
+    console.log('Vectorizing SLM data...');
+    const { xs, ys } = vectorizeSLMData(sequences, tokenizer);
+    console.log('SLM Tensors created:', xs.shape, ys.shape);
+    
+    status.textContent = 'Creating SLM model...';
+    console.log('Creating SLM model...');
+    
+    // Create model
+    const model = createSLMModel(seqLength, Object.keys(tokenizer.charToId).length);
+    console.log('SLM Model created successfully');
+    
+    status.textContent = 'Training... (watch the chart below!)';
+    console.log('Starting SLM training...');
+    
+    // Train model
+    await trainSLMModel(model, xs, ys, epochs, batchSize, (epoch, loss, minLoss, lr) => {
+      console.log(`SLM Training callback: epoch ${epoch}, loss ${loss}`);
+      updateSLMTrainingVisualization(epoch, loss);
+      updateSLMMetricsDisplay(epoch, loss, minLoss);
+      updateSLMProgressBar(epoch, epochs);
+      status.textContent = `Epoch ${epoch}/${epochs}: Loss=${loss.toFixed(4)}, Min=${minLoss.toFixed(4)}, LR=${lr.toFixed(6)}`;
+    });
+    
+    // Clean up tensors
+    xs.dispose();
+    ys.dispose();
+    
+    // Store model and tokenizer for generation
+    slmGenerationModel = model;
+    slmGenerationTokenizer = tokenizer;
+    
+    // Initialize generation visualization AFTER training is complete
+    initSLMGenerationVisualization();
+    
+    status.textContent = 'Training complete! You can now generate text.';
+    console.log('SLM Training completed successfully');
+    showPopupAlert('Training complete! You can now generate text.');
+    
+  } catch (error) {
+    console.error('SLM Training error:', error);
+    const status = document.getElementById('slm-status');
+    status.textContent = 'Training failed: ' + error.message;
+    showPopupAlert('Training failed: ' + error.message);
+  }
+}
+
+// Initialize SLM visualization when selected - ONLY show training interface initially
+function initSLMVisualization() {
+  console.log('SLM visualization initialized - showing training interface only');
+  // Clear any existing visualization
+  const visContainer = document.getElementById('slm-vis');
+  if (visContainer) {
+    visContainer.innerHTML = '';
   }
 } 

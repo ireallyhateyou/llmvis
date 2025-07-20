@@ -1,5 +1,3 @@
-// lstm.js
-
 // --- Popup Alert Helper ---
 function showPopupAlert(message) {
   const popup = document.getElementById('popup-alert');
@@ -246,13 +244,16 @@ The Undercity Incident is crazy`;
 
 // --- 1. Tokenization Utilities ---
 function getUniqueChars(text) {
+  // Always return an array
   return Array.from(new Set(text.split('')));
 }
 function textToIndices(text, charToIdx) {
-  return text.split('').map(c => charToIdx[c]);
+  // Fallback to 0 if char not found
+  return text.split('').map(c => (c in charToIdx ? charToIdx[c] : 0));
 }
 function indicesToText(indices, idxToChar) {
-  return indices.map(i => idxToChar[i]).join('');
+  // idxToChar is always an array
+  return indices.map(i => idxToChar[i] || '?').join('');
 }
 
 // --- 2. Data Preparation ---
@@ -474,6 +475,19 @@ window.startGenerationVisualization = startGenerationVisualization;
 window.pauseGenerationVisualization = pauseGenerationVisualization;
 window.resetGenerationVisualization = resetGenerationVisualization;
 
+// --- Ensure idxToChar is always an array ---
+function ensureIdxToCharArray() {
+  if (!Array.isArray(window.idxToChar) && window.charToIdx) {
+    // Rebuild idxToChar as an array
+    const arr = [];
+    Object.keys(window.charToIdx).forEach(c => {
+      arr[window.charToIdx[c]] = c;
+    });
+    window.idxToChar = arr;
+    console.warn('idxToChar was not an array, rebuilt from charToIdx:', arr);
+  }
+}
+
 window.addEventListener('DOMContentLoaded', () => {
   const trainBtn = document.getElementById('lstm-train-btn');
   const trainStatus = document.getElementById('lstm-train-status');
@@ -498,7 +512,7 @@ window.addEventListener('DOMContentLoaded', () => {
   if (trainBtn) {
     trainBtn.onclick = async () => {
       try {
-        const text = trainTextArea.value;
+        let text = trainTextArea.value;
         const shakespeareMode = shakespeareModeToggle.checked;
         
         if (shakespeareMode) {
@@ -599,6 +613,9 @@ window.addEventListener('DOMContentLoaded', () => {
         ys.dispose();
         trainStatus.textContent = 'Training complete! Check the visualization above.';
         
+        // Show the vocabulary to the user
+        trainStatus.textContent += '\nVocabulary: ' + idxToChar.join('');
+        
         // Initialize generation visualization after training
         initGenerationVisualization();
         
@@ -611,19 +628,26 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 }); 
 
+// --- Seed sanitization for generation ---
+function sanitizeSeed(seed, charToIdx) {
+  let sanitized = '';
+  for (const c of seed) {
+    if (c in charToIdx) sanitized += c;
+  }
+  return sanitized.length > 0 ? sanitized : Object.keys(charToIdx)[0];
+}
+
 // --- Text Generation Visualization ---
 let generationVisualization = null;
 
 function initGenerationVisualization() {
   const visContainer = document.getElementById('lstm-vis');
   if (!visContainer) return;
-  
   // Remove any existing generation visualization
   const existingGenViz = visContainer.querySelector('.generation-viz-container');
   if (existingGenViz) {
     existingGenViz.remove();
   }
-  
   // Add generation visualization section
   const genVizSection = document.createElement('div');
   genVizSection.className = 'generation-viz-container';
@@ -632,7 +656,8 @@ function initGenerationVisualization() {
     <div class="generation-controls">
       <div class="input-group">
         <label for="generation-seed">Seed Text:</label>
-        <input type="text" id="generation-seed" placeholder="I love Shipwrecked reviewers <3" value="I love Shipwrecked reviewers <3" style="width: 300px;">
+        <input type="text" id="generation-seed" placeholder="I love Shipwrecked" value="I love Shipwrecked" style="width: 300px;">
+        <small id="seed-note" style="color:#888;display:block;">Only the first <span id="seq-len-note"></span> characters will be used as seed.</small>
       </div>
       <div class="input-group">
         <label for="generation-length">Length:</label>
@@ -650,7 +675,7 @@ function initGenerationVisualization() {
     </div>
     <div class="generation-display">
       <div class="seed-text-container">
-        <label>Seed Text:</label>
+        <label>Seed Text Used:</label>
         <div id="seed-display" class="seed-display"></div>
       </div>
       <div class="generation-container">
@@ -667,17 +692,34 @@ function initGenerationVisualization() {
       <button id="pause-generation" class="gen-btn" disabled>Pause</button>
       <button id="reset-generation" class="gen-btn">Reset</button>
     </div>
+    <div style="margin-top:2em;">
+      <label><b>LSTM Memory State (Hidden State) Heatmap</b></label>
+      <canvas id="lstm-memory-heatmap" width="400" height="120"></canvas>
+    </div>
   `;
-  
   visContainer.appendChild(genVizSection);
-  
   // Add event listeners
   const startBtn = document.getElementById('start-generation');
   const pauseBtn = document.getElementById('pause-generation');
   const resetBtn = document.getElementById('reset-generation');
   const speedSlider = document.getElementById('generation-speed');
   const speedValue = document.getElementById('speed-value');
-  
+  // Show seqLength in note
+  const seqLenNote = document.getElementById('seq-len-note');
+  if (seqLenNote) seqLenNote.textContent = window.seqLength || 15;
+  // Auto-truncate seed input as user types
+  const seedInput = document.getElementById('generation-seed');
+  if (seedInput) {
+    seedInput.addEventListener('input', function() {
+      const maxLen = window.seqLength || 15;
+      if (this.value.length > maxLen) {
+        this.value = this.value.slice(0, maxLen);
+      }
+      // Update the display immediately
+      const seedDisplay = document.getElementById('seed-display');
+      if (seedDisplay) seedDisplay.textContent = this.value;
+    });
+  }
   if (startBtn) {
     startBtn.onclick = () => startGenerationVisualization();
   }
@@ -695,7 +737,6 @@ function initGenerationVisualization() {
       }
     };
   }
-  
   generationVisualization = {
     isGenerating: false,
     speed: 200,
@@ -710,50 +751,46 @@ function startGenerationVisualization() {
     showPopupAlert('Train the model first!');
     return;
   }
-  
   const seedInput = document.getElementById('generation-seed');
   if (!seedInput || !seedInput.value) {
     showPopupAlert('Enter a seed text first!');
     return;
   }
-
   const shakespeareModeToggle = document.getElementById('shakespeare-mode');
   if (shakespeareModeToggle && shakespeareModeToggle.checked) {
     seedInput.value = 'to be or not to be that is the question';
   }
-  
   const startBtn = document.getElementById('start-generation');
   const pauseBtn = document.getElementById('pause-generation');
   const seedDisplay = document.getElementById('seed-display');
   const generationDisplay = document.getElementById('generation-display');
   const predictionDisplay = document.getElementById('prediction-display');
-  
   if (startBtn) startBtn.disabled = true;
   if (pauseBtn) pauseBtn.disabled = false;
-  
+  // Sanitize the seed
+  const rawSeed = seedInput.value;
+  const sanitizedSeed = sanitizeSeed(rawSeed, window.charToIdx);
+  if (sanitizedSeed.length < rawSeed.length) {
+    showPopupAlert('Some characters in your seed are not in the model vocabulary and will be ignored.');
+  }
   generationVisualization.isGenerating = true;
-  generationVisualization.seedText = seedInput.value.slice(0, window.seqLength);
+  generationVisualization.seedText = sanitizedSeed.slice(0, window.seqLength);
   generationVisualization.currentText = generationVisualization.seedText;
-  
   if (seedDisplay) {
     seedDisplay.textContent = generationVisualization.seedText;
     seedDisplay.className = 'seed-display active';
   }
-  
   if (generationDisplay) {
     generationDisplay.textContent = '';
     generationDisplay.className = 'generation-display active';
   }
-  
   if (predictionDisplay) {
     predictionDisplay.innerHTML = '';
     predictionDisplay.className = 'prediction-display active';
   }
-  
   // Start generation loop
   generationVisualization.timer = setInterval(() => {
     if (!generationVisualization.isGenerating) return;
-    
     generateNextCharacter();
   }, generationVisualization.speed);
 }
@@ -799,36 +836,32 @@ function resetGenerationVisualization() {
 }
 
 async function generateNextCharacter() {
+  ensureIdxToCharArray();
   console.log('generateNextCharacter called');
-      console.log('Global variables:', {
-      lstmModel: !!window.lstmModel,
-      charToIdx: !!window.charToIdx,
-      idxToChar: !!window.idxToChar,
-      seqLength: window.seqLength,
-      vocabSize: window.idxToChar ? window.idxToChar.length : 'undefined'
-    });
-    console.log('idxToChar details:', {
-      type: typeof window.idxToChar,
-      isArray: Array.isArray(window.idxToChar),
-      length: window.idxToChar ? window.idxToChar.length : 'N/A',
-      sample: window.idxToChar && Array.isArray(window.idxToChar) ? window.idxToChar.slice(0, 5) : 'N/A',
-      keys: window.idxToChar && typeof window.idxToChar === 'object' ? Object.keys(window.idxToChar).slice(0, 5) : 'N/A'
-    });
-  
+  console.log('Global variables:', {
+    lstmModel: !!window.lstmModel,
+    charToIdx: !!window.charToIdx,
+    idxToChar: !!window.idxToChar,
+    seqLength: window.seqLength,
+    vocabSize: Array.isArray(window.idxToChar) ? window.idxToChar.length : Object.keys(window.idxToChar).length
+  });
+  console.log('idxToChar details:', {
+    type: typeof window.idxToChar,
+    isArray: Array.isArray(window.idxToChar),
+    length: window.idxToChar ? (Array.isArray(window.idxToChar) ? window.idxToChar.length : Object.keys(window.idxToChar).length) : 'N/A',
+    sample: window.idxToChar && Array.isArray(window.idxToChar) ? window.idxToChar.slice(0, 5) : 'N/A',
+    keys: window.idxToChar && typeof window.idxToChar === 'object' ? Object.keys(window.idxToChar).slice(0, 5) : 'N/A'
+  });
   if (!window.lstmModel || !window.charToIdx || !window.idxToChar) {
     console.error('Missing global variables for generation');
     return;
   }
-  
   try {
     const inputIndices = textToIndices(generationVisualization.currentText, window.charToIdx);
-    
     // Ensure we have the right sequence length
     const seqLength = window.seqLength || 15;
-    const vocabSize = Array.isArray(window.idxToChar) ? window.idxToChar.length : 26; // Fallback to 26 for basic alphabet
-    
+    const vocabSize = Array.isArray(window.idxToChar) ? window.idxToChar.length : Object.keys(window.idxToChar).length;
     console.log('Using vocab size:', vocabSize);
-    
     // Pad or truncate input to match sequence length
     let paddedIndices = [...inputIndices];
     while (paddedIndices.length < seqLength) {
@@ -837,9 +870,13 @@ async function generateNextCharacter() {
     if (paddedIndices.length > seqLength) {
       paddedIndices = paddedIndices.slice(-seqLength); // Take last seqLength elements
     }
-    
+    // Guard: check for invalid indices
+    if (paddedIndices.some(i => typeof i !== 'number' || isNaN(i) || i < 0 || i >= vocabSize)) {
+      console.error('Invalid input indices:', paddedIndices);
+      pauseGenerationVisualization();
+      return;
+    }
     console.log('Input indices:', paddedIndices, 'Length:', paddedIndices.length, 'Vocab size:', vocabSize);
-    
     // Prepare input tensor
     const inputTensor = tf.tidy(() => {
       const x = tf.buffer([1, seqLength, vocabSize]);
@@ -851,23 +888,49 @@ async function generateNextCharacter() {
       }
       return x.toTensor();
     });
-    
     // Predict next char
+    let nextIdx;
     const preds = window.lstmModel.predict(inputTensor).dataSync();
-    const nextIdx = sampleWithTemperature(preds, 0.8); // Use temperature for variety
-    const nextChar = window.idxToChar[nextIdx];
-    
+    nextIdx = sampleWithTemperature(preds, 0.8); // Use temperature for variety
+    const vocabLen = Array.isArray(window.idxToChar) ? window.idxToChar.length : Object.keys(window.idxToChar).length;
+    console.log('Sampled nextIdx:', nextIdx, 'idxToChar.length:', vocabLen, 'preds:', preds);
+    // Defensive fix: if nextIdx is out of bounds, pick the most probable valid index
+    if (typeof nextIdx !== 'number' || nextIdx < 0 || nextIdx >= vocabLen) {
+      // Find the most probable valid index
+      let maxProb = -Infinity, maxIdx = 0;
+      for (let i = 0; i < preds.length && i < vocabLen; ++i) {
+        if (preds[i] > maxProb) {
+          maxProb = preds[i];
+          maxIdx = i;
+        }
+      }
+      console.warn('nextIdx out of bounds:', nextIdx, 'Falling back to maxIdx:', maxIdx);
+      nextIdx = maxIdx;
+    }
+    const nextChar = window.idxToChar[nextIdx] || '?';
     // Update current text
     generationVisualization.currentText += nextChar;
     if (generationVisualization.currentText.length > seqLength) {
       generationVisualization.currentText = generationVisualization.currentText.slice(1);
     }
-    
     // Update displays
     updateGenerationDisplays(nextChar, preds, nextIdx);
-    
     tf.dispose(inputTensor);
-    
+    // Remove/guard LSTM state visualization block to prevent null errors
+    /*
+    if (window.lstmModel && window.lstmModel.layers) {
+      const lstmLayer = window.lstmModel.layers.find(l => l.getClassName && l.getClassName() === 'LSTM');
+      if (lstmLayer && lstmLayer.states && lstmLayer.states[0]) {
+        try {
+          const hidden = lstmLayer.states[0].arraySync()[0];
+          lstmMemoryStates.push(hidden);
+          drawLSTMMemoryHeatmap(lstmMemoryStates);
+        } catch (e) {
+          // Hidden state not available
+        }
+      }
+    }
+    */
   } catch (error) {
     console.error('Generation error:', error);
     pauseGenerationVisualization();
@@ -927,6 +990,26 @@ function updateGenerationDisplays(nextChar, predictions, selectedIdx) {
     console.error('prediction-display element not found!');
   }
 } 
+
+function drawLSTMMemoryHeatmap(states) {
+  const canvas = document.getElementById('lstm-memory-heatmap');
+  if (!canvas || !states.length) return;
+  const ctx = canvas.getContext('2d');
+  const rows = states.length;
+  const cols = states[0].length;
+  const cellWidth = canvas.width / cols;
+  const cellHeight = canvas.height / rows;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      // Normalize value to [0,1] for color
+      const v = states[y][x];
+      const norm = (v + 1) / 2; // assuming tanh output in [-1,1]
+      ctx.fillStyle = `rgba(0,0,0,${norm})`;
+      ctx.fillRect(x * cellWidth, y * cellHeight, cellWidth, cellHeight);
+    }
+  }
+}
 
 // Shakespeare corpus loading function
 async function loadShakespeareCorpus() {
