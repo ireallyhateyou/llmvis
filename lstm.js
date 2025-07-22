@@ -403,7 +403,7 @@ async function trainLSTMModel(model, xs, ys, epochs, batchSize, statusCallback) 
         epochs: 1,
         shuffle: true,
         callbacks: {
-          onBatchEnd: (batch, logs) => {
+          onEpochEnd: (epochIdx, logs) => {
             if (logs && typeof logs.loss === 'number' && logs.loss > 0) {
               if (statusCallback) {
                 const minLoss = history.loss.length > 0 ? Math.min(...history.loss) : logs.loss;
@@ -412,11 +412,9 @@ async function trainLSTMModel(model, xs, ys, epochs, batchSize, statusCallback) 
             }
             // Aggressive memory cleanup
             tf.tidy(() => {});
-            // Force garbage collection every few batches
-            if (batch % 5 === 0) {
-              if (typeof window.gc === 'function') {
-                window.gc();
-              }
+            // Force garbage collection
+            if (typeof window.gc === 'function') {
+              window.gc();
             }
           }
         }
@@ -432,6 +430,7 @@ async function trainLSTMModel(model, xs, ys, epochs, batchSize, statusCallback) 
       
       console.log(`Epoch ${epoch + 1}: Loss=${loss.toFixed(4)}, Accuracy=${accuracy.toFixed(4)}, LR=${currentLR.toFixed(6)}`);
       
+      // Only update visualization at the end of each epoch
       if (statusCallback) {
         const minLoss = Math.min(...history.loss);
         statusCallback(epoch + 1, loss, minLoss, currentLR);
@@ -1027,3 +1026,141 @@ window.createShakespeareLSTMModel = createShakespeareLSTMModel;
 window.startGenerationVisualization = startGenerationVisualization;
 window.pauseGenerationVisualization = pauseGenerationVisualization;
 window.resetGenerationVisualization = resetGenerationVisualization; 
+
+async function trainLSTM() {
+  console.log('trainLSTM called');
+  // Parse DOM and get settings
+  const trainText = document.getElementById('lstm-train-text').value.trim();
+  const seqLength = parseInt(document.getElementById('lstm-seq-length').value);
+  const epochs = parseInt(document.getElementById('lstm-epochs').value);
+  const batchSize = parseInt(document.getElementById('lstm-batch-size').value);
+  const shakespeareMode = document.getElementById('shakespeare-mode').checked;
+
+  // Estimate parameter count for LSTM model (do this BEFORE model creation)
+  const chars = [...new Set(trainText)].sort();
+  const vocabSize = chars.length;
+  let totalParams = 0;
+  if (shakespeareMode) {
+    const lstm1 = 4 * (512 * (512 + vocabSize));
+    const lstm2 = 4 * (256 * (256 + 512));
+    const dense = 256 * vocabSize + vocabSize;
+    totalParams = lstm1 + lstm2 + dense;
+  } else {
+    const lstm1 = 4 * (256 * (256 + vocabSize));
+    const lstm2 = 4 * (128 * (128 + 256));
+    const dense = 128 * vocabSize + vocabSize;
+    totalParams = lstm1 + lstm2 + dense;
+  }
+  // Reduce estimate to 1/4 of previous calculation
+  const estMinutes = Math.max(1, Math.round((totalParams / 50000) * epochs * 0.05));
+
+  // Show modal and wait for user confirmation BEFORE model creation
+  console.log('About to show model warning modal', {totalParams, estMinutes});
+  if (typeof window.showModelWarning === 'function') {
+    // Ensure modal is closed before proceeding
+    await new Promise(resolve => {
+      window.showModelWarning(totalParams, estMinutes, () => {
+        // Force close modal in case it's still visible
+        const modal = document.getElementById('model-warning-modal');
+        if (modal) modal.style.display = 'none';
+        setTimeout(resolve, 0); // allow DOM to update
+      });
+    });
+    console.log('User closed model warning modal, proceeding to ALL TensorFlow.js code');
+  } else {
+    // Fallback: show alert if modal function is missing
+    alert(`Warning: you are about to create a model that has ${totalParams.toLocaleString()} parameters, expect your browser to freeze for about ${estMinutes} minute(s).`);
+    console.log('Fallback alert shown, proceeding to ALL TensorFlow.js code');
+  }
+
+  // --- ALL TensorFlow.js code must be after this point ---
+  console.log('About to run TensorFlow.js code (data prep, tensors, model creation, training)');
+
+  // Initialize visualization
+  if (window.initTrainingVisualization) {
+    console.log('Initializing training visualization');
+    window.initTrainingVisualization();
+  }
+
+  try {
+    const status = document.getElementById('lstm-status');
+    status.textContent = 'Preparing data...';
+    console.log('Preparing data...');
+    // Get unique characters
+    const chars = [...new Set(trainText)].sort();
+    const vocabSize = chars.length;
+    console.log('Vocabulary size:', vocabSize);
+    // Create character mappings
+    const charToIdx = {};
+    const idxToChar = {};
+    chars.forEach((char, idx) => {
+      charToIdx[char] = idx;
+      idxToChar[idx] = char;
+    });
+    // Create sequences
+    const sequences = [];
+    for (let i = 0; i <= trainText.length - seqLength; i++) {
+      const sequence = trainText.slice(i, i + seqLength);
+      const nextChar = trainText[i + seqLength];
+      sequences.push({ input: sequence, label: nextChar });
+    }
+    console.log('Created', sequences.length, 'sequences');
+    // Vectorize data
+    console.log('Vectorizing data...');
+    const xs = tf.buffer([sequences.length, seqLength, vocabSize]);
+    const ys = tf.buffer([sequences.length, vocabSize]);
+    sequences.forEach((seq, i) => {
+      // Input sequence
+      for (let t = 0; t < seqLength; t++) {
+        xs.set(1, i, t, charToIdx[seq.input[t]]);
+      }
+      // Output (next character)
+      ys.set(1, i, charToIdx[seq.label]);
+    });
+    const xsTensor = xs.toTensor();
+    const ysTensor = ys.toTensor();
+    console.log('Tensors created:', xsTensor.shape, ysTensor.shape);
+    status.textContent = 'Creating model...';
+    console.log('Creating model...');
+    // Create model
+    let model;
+    if (shakespeareMode) {
+      console.log('Creating Shakespeare model');
+      model = window.createShakespeareLSTMModel(seqLength, vocabSize);
+    } else {
+      console.log('Creating standard model');
+      model = window.createLSTMModel(seqLength, vocabSize);
+    }
+    console.log('Model created with backend:', tf.getBackend());
+    status.textContent = 'Training... (watch the chart below!)';
+    console.log('Starting training...');
+    // Train model using the function from lstm.js
+    await window.trainLSTMModel(model, xsTensor, ysTensor, epochs, batchSize, (epoch, loss, minLoss, lr) => {
+      console.log(`Training callback: epoch ${epoch}, loss ${loss}`);
+      if (window.updateTrainingVisualization) {
+        window.updateTrainingVisualization(epoch, loss);
+      }
+      status.textContent = `Epoch ${epoch}/${epochs}: Loss=${loss.toFixed(4)}, Min=${minLoss.toFixed(4)}, LR=${lr.toFixed(6)}`;
+    });
+    // Clean up tensors
+    xsTensor.dispose();
+    ysTensor.dispose();
+    // Store model and mappings
+    window.lstmModel = model;
+    window.charToIdx = charToIdx;
+    window.idxToChar = idxToChar;
+    window.seqLength = seqLength;
+    // Initialize generation visualization
+    if (window.initGenerationVisualization) {
+      window.initGenerationVisualization();
+    }
+    status.textContent = 'Training complete! You can now generate text.';
+    console.log('Training completed successfully');
+    showPopupAlert('Training complete! You can now generate text.');
+  } catch (error) {
+    console.error('Training error:', error);
+    const status = document.getElementById('lstm-status');
+    status.textContent = 'Training failed: ' + error.message;
+    showPopupAlert('Training failed: ' + error.message);
+  }
+} 

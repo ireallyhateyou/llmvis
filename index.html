@@ -1,14 +1,35 @@
+<!--sorry for the vibe coding, I had a week to make this :'(-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>LLMVis</title>
+  <link rel="icon" href="data:;base64,iVBORw0KGgo=" />
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.18.0/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.18.0/dist/tf-backend-wasm.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis"></script>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <script src="lstm.js"></script>
+  <script>
+    // Model warning modal logic (moved to head for global availability)
+    window.showModelWarning = function(paramCount, estMinutes, callback) {
+      const modal = document.getElementById('model-warning-modal');
+      const msg = document.getElementById('model-warning-message');
+      const closeBtn = document.getElementById('model-warning-close');
+      const confirmBtn = document.getElementById('model-warning-confirm');
+      msg.innerHTML = `Warning: you are about to create a model that has <b>${paramCount.toLocaleString()}</b> parameters, expect your browser to freeze for about <b>${estMinutes}</b> minute${estMinutes !== 1 ? 's' : ''}.`;
+      modal.style.display = 'flex';
+      function closeModal() {
+        modal.style.display = 'none';
+        closeBtn.onclick = null;
+        confirmBtn.onclick = null;
+        if (callback) callback();
+      }
+      closeBtn.onclick = closeModal;
+      confirmBtn.onclick = closeModal;
+    };
+  </script>
   <script>
     // Configure TensorFlow.js to use the best available backend
     window.addEventListener('load', async function() {
@@ -162,17 +183,15 @@ And by opposing end them.</textarea>
 
   <div id="slm-container" style="display: none;">
     <h2>Small Language Model (SLM)</h2>
-    
     <label for="slm-train-text">Training Text:</label>
-    <textarea id="slm-train-text" placeholder="Enter training text...">Roses are red,
-Violets are blue,
-I love Hack Club
-and so should you!</textarea>
-    
+    <textarea id="slm-train-text" class="lstm-train-text" placeholder="Enter training text...">To be, or not to be, that is the question:
+Whether 'tis nobler in the mind to suffer
+The slings and arrows of outrageous fortune,
+Or to take arms against a sea of troubles
+And by opposing end them.</textarea>
     <!-- Default seed text for SLM generation, editable from HTML -->
-    <input type="hidden" id="slm-default-seed" value="I love Shipwrecked reviewers <3">
-    
-    <div class="slm-controls">
+    <input type="hidden" id="slm-default-seed" value="To be, or not to be">
+    <div class="slm-controls lstm-controls">
       <div class="control-group">
         <label for="slm-epochs">Epochs:</label>
         <input type="number" id="slm-epochs" value="40" min="1" max="100">
@@ -186,10 +205,10 @@ and so should you!</textarea>
         <input type="number" id="slm-seq-length" value="30" min="5" max="50">
       </div>
     </div>
-    
     <button onclick="trainSLM()">Train Model</button>
     <div id="slm-status"></div>
     <div id="slm-vis"></div>
+    <!-- No static canvases here; they will be created dynamically -->
   </div>
   
   <div id="rwkv-container" style="display: none;">
@@ -367,127 +386,6 @@ and so should you!</textarea>
         
         showPopupAlert('Standard mode enabled.');
       }x
-    }
-
-    // Simplified training function that uses the LSTM.js functions
-    async function trainLSTM() {
-      console.log('trainLSTM called');
-      
-      const trainText = document.getElementById('lstm-train-text').value.trim();
-      const seqLength = parseInt(document.getElementById('lstm-seq-length').value);
-      const epochs = parseInt(document.getElementById('lstm-epochs').value);
-      const batchSize = parseInt(document.getElementById('lstm-batch-size').value);
-      const shakespeareMode = document.getElementById('shakespeare-mode').checked;
-      
-      console.log('Training parameters:', { trainText: trainText.substring(0, 50) + '...', seqLength, epochs, batchSize, shakespeareMode });
-      
-      if (!trainText) {
-        showPopupAlert('Please enter training text or enable Shakespeare mode!');
-        return;
-      }
-      
-      // Initialize visualization
-      if (window.initTrainingVisualization) {
-        console.log('Initializing training visualization');
-        window.initTrainingVisualization();
-      }
-      
-      try {
-        const status = document.getElementById('lstm-status');
-        status.textContent = 'Preparing data...';
-        console.log('Preparing data...');
-        
-        // Get unique characters
-        const chars = [...new Set(trainText)].sort();
-        const vocabSize = chars.length;
-        console.log('Vocabulary size:', vocabSize);
-        
-        // Create character mappings
-        const charToIdx = {};
-        const idxToChar = {};
-        chars.forEach((char, idx) => {
-          charToIdx[char] = idx;
-          idxToChar[idx] = char;
-        });
-        
-        // Create sequences
-        const sequences = [];
-        for (let i = 0; i <= trainText.length - seqLength; i++) {
-          const sequence = trainText.slice(i, i + seqLength);
-          const nextChar = trainText[i + seqLength];
-          sequences.push({ input: sequence, label: nextChar });
-        }
-              console.log('Created', sequences.length, 'sequences');
-      
-      // Vectorize data
-      console.log('Vectorizing data...');
-      const xs = tf.buffer([sequences.length, seqLength, vocabSize]);
-      const ys = tf.buffer([sequences.length, vocabSize]);
-        
-        sequences.forEach((seq, i) => {
-          // Input sequence
-          for (let t = 0; t < seqLength; t++) {
-            xs.set(1, i, t, charToIdx[seq.input[t]]);
-          }
-          // Output (next character)
-          ys.set(1, i, charToIdx[seq.label]);
-        });
-        
-        const xsTensor = xs.toTensor();
-        const ysTensor = ys.toTensor();
-        console.log('Tensors created:', xsTensor.shape, ysTensor.shape);
-        
-        status.textContent = 'Creating model...';
-        console.log('Creating model...');
-        
-        // Create model
-        let model;
-        if (shakespeareMode) {
-          console.log('Creating Shakespeare model');
-          model = window.createShakespeareLSTMModel(seqLength, vocabSize);
-        } else {
-          console.log('Creating standard model');
-          model = window.createLSTMModel(seqLength, vocabSize);
-        }
-        console.log('Model created successfully');
-        
-        status.textContent = 'Training... (watch the chart below!)';
-        console.log('Starting training...');
-        
-        // Train model using the function from lstm.js
-        await window.trainLSTMModel(model, xsTensor, ysTensor, epochs, batchSize, (epoch, loss, minLoss, lr) => {
-          console.log(`Training callback: epoch ${epoch}, loss ${loss}`);
-          if (window.updateTrainingVisualization) {
-            window.updateTrainingVisualization(epoch, loss);
-          }
-          status.textContent = `Epoch ${epoch}/${epochs}: Loss=${loss.toFixed(4)}, Min=${minLoss.toFixed(4)}, LR=${lr.toFixed(6)}`;
-        });
-        
-        // Clean up tensors
-        xsTensor.dispose();
-        ysTensor.dispose();
-        
-        // Store model and mappings
-        window.lstmModel = model;
-        window.charToIdx = charToIdx;
-        window.idxToChar = idxToChar;
-        window.seqLength = seqLength;
-        
-        // Initialize generation visualization
-        if (window.initGenerationVisualization) {
-          window.initGenerationVisualization();
-        }
-        
-        status.textContent = 'Training complete! You can now generate text.';
-        console.log('Training completed successfully');
-        showPopupAlert('Training complete! You can now generate text.');
-        
-      } catch (error) {
-        console.error('Training error:', error);
-        const status = document.getElementById('lstm-status');
-        status.textContent = 'Training failed: ' + error.message;
-        showPopupAlert('Training failed: ' + error.message);
-      }
     }
 
     // Collapsible tree state
@@ -760,6 +658,15 @@ and so should you!</textarea>
   </div>
   
   <div id="global-error" style="color:#c00;font-weight:bold;margin:1em 0;"></div>
+  
+  <!-- Model Creation Warning Modal -->
+  <div id="model-warning-modal" class="modal" style="display:none; position:fixed; z-index:10000; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.5); align-items:center; justify-content:center;">
+    <div class="modal-content" style="background:#fff; padding:2em 2.5em; border-radius:10px; box-shadow:0 2px 16px #0003; max-width:90vw; width:400px; text-align:center; position:relative;">
+      <span id="model-warning-close" style="position:absolute; top:0.5em; right:1em; font-size:2em; color:#888; cursor:pointer;">&times;</span>
+      <div id="model-warning-message" style="font-size:1.1em; margin-bottom:1.5em;"></div>
+      <button id="model-warning-confirm" style="padding:0.7em 2em; font-size:1em; font-weight:bold; border-radius:6px; background:#222; color:#fff; border:none; cursor:pointer;">Continue</button>
+    </div>
+  </div>
   
   <style>
     #eliza-tree ul, #eliza-tree li {

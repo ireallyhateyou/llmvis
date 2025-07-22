@@ -336,22 +336,6 @@ button:active:not(:disabled) {
   font-family: 'Times New Roman', serif;
 }
 
-#slm-container input[type="text"], #slm-container input[type="number"], #slm-container textarea {
-  padding: 0.5em;
-  border: 1px solid #000000;
-  border-radius: 4px;
-  font-family: 'Courier New', monospace;
-  font-size: 14px;
-  background: #ffffff;
-  color: #000000;
-}
-
-#slm-container input[type="text"]:focus, #slm-container input[type="number"]:focus, #slm-container textarea:focus {
-  outline: none;
-  border-color: #000000;
-  box-shadow: 0 0 5px rgba(0,0,0,0.2);
-}
-
 #slm-container button {
   padding: 0.75em 1.5em;
   border: 2px solid #000000;
@@ -1839,7 +1823,8 @@ li.has-children:hover::before {
   color: #000000;
 } 
 
-#lstm-container textarea {
+#lstm-container textarea,
+#slm-container textarea {
   width: 100%;
   min-height: 120px;
   max-height: 300px;

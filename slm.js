@@ -284,27 +284,38 @@ function createSLMModel(seqLength, vocabSize) {
     inputLength: seqLength,
     maskZero: true
   }).apply(input);
-  // LSTM layer (return sequences for attention)
-  const lstm = tf.layers.lstm({
+  // LSTM layer (return sequences for attention, return state for memory)
+  const lstmLayer = tf.layers.lstm({
     units: 32,
     returnSequences: true,
+    returnState: true,
     dropout: 0.1
-  }).apply(embed);
+  });
+  // lstmOut: [output, hiddenState, cellState]
+  const lstmOut = lstmLayer.apply(embed);
+  const lstmSeq = Array.isArray(lstmOut) ? lstmOut[0] : lstmOut;
+  const lstmHidden = Array.isArray(lstmOut) ? lstmOut[1] : null;
   // Self-attention: query=key=value=lstm output
   // Attention weights: softmax(QK^T/sqrt(d))
-  const permute = tf.layers.permute({dims: [2, 1]}).apply(lstm); // [batch, 32, seq]
-  const attentionScores = tf.layers.dot({axes: [2, 1]}).apply([lstm, permute]); // [batch, seq, seq]
+  const permute = tf.layers.permute({dims: [2, 1]}).apply(lstmSeq); // [batch, 32, seq]
+  const attentionScores = tf.layers.dot({axes: [2, 1]}).apply([lstmSeq, permute]); // [batch, seq, seq]
   const attentionWeights = tf.layers.activation({activation: 'softmax'}).apply(attentionScores); // [batch, seq, seq]
-  const attended = tf.layers.dot({axes: [2, 1]}).apply([attentionWeights, lstm]); // [batch, seq, 32]
+  const attended = tf.layers.dot({axes: [2, 1]}).apply([attentionWeights, lstmSeq]); // [batch, seq, 32]
   const flat = tf.layers.flatten().apply(attended);
   const dense = tf.layers.dense({units: 32, activation: 'relu'}).apply(flat);
   const output = tf.layers.dense({units: vocabSize, activation: 'softmax'}).apply(dense);
-  const model = tf.model({inputs: input, outputs: [output, attentionWeights]});
+  // Only output the next-token prediction for training
+  const model = tf.model({inputs: input, outputs: output});
   model.compile({
     optimizer: tf.train.adam(0.001),
     loss: 'sparseCategoricalCrossentropy',
     metrics: ['accuracy']
   });
+  // For attention and memory visualization, create a separate model after training
+  model._attentionModelFactory = function() {
+    // outputs: [output, attentionWeights, hiddenState]
+    return tf.model({inputs: input, outputs: [output, attentionWeights, lstmHidden]});
+  };
   return model;
 }
 
@@ -484,13 +495,15 @@ function initSLMGenerationVisualization() {
       <button id="slm-pause-gen" class="gen-btn" disabled>Pause</button>
       <button id="slm-reset-gen" class="gen-btn">Reset</button>
     </div>
-    <div style="margin-top:2em;">
-      <label><b>SLM Memory State (Hidden State) Heatmap</b></label>
-      <canvas id="slm-memory-heatmap" width="400" height="120"></canvas>
-    </div>
-    <div style="margin-top:2em;">
-      <label><b>SLM Attention Map</b></label>
-      <canvas id="slm-attention-map" width="400" height="120"></canvas>
+    <div class="slm-heatmap-row" style="display: flex; flex-direction: row; gap: 2em; margin-top:2em;">
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;">
+        <label><b>SLM Memory State (Hidden State) Heatmap</b></label>
+        <canvas id="slm-memory-heatmap" width="400" height="120"></canvas>
+      </div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center;">
+        <label><b>SLM Attention Map</b></label>
+        <canvas id="slm-attention-map" width="400" height="120"></canvas>
+      </div>
     </div>
   `;
   
@@ -596,30 +609,42 @@ async function generateSLMNextCharacter() {
     while (inputTokens.length < seqLength) {
       inputTokens.unshift(slmGenerationTokenizer.charToId['[PAD]']);
     }
-    // Predict next token and attention
+    // Predict next token, attention, and memory state
     const input = tf.tensor2d([inputTokens], [1, seqLength]);
-    const [prediction, attention] = slmGenerationModel.predict(input);
-    const nextToken = sampleWithTemperature(prediction, temperature);
-    // Try to get the hidden state from the LSTM layer
-    if (slmGenerationModel && slmGenerationModel.layers) {
-      const lstmLayer = slmGenerationModel.layers.find(l => l.getClassName && l.getClassName() === 'LSTM');
-      if (lstmLayer && lstmLayer.states) {
-        const hidden = lstmLayer.states[0].arraySync()[0];
-        if (Array.isArray(hidden) && hidden.length > 0) {
-          slmMemoryStates.push(hidden);
-          drawSLMMemoryHeatmap(slmMemoryStates);
-        }
-      }
+    if (!slmGenerationModel._attentionModel && slmGenerationModel._attentionModelFactory) {
+      slmGenerationModel._attentionModel = slmGenerationModel._attentionModelFactory();
     }
-    // Store attention weights for visualization
+    let prediction, attention, hiddenState;
+    if (slmGenerationModel._attentionModel) {
+      [prediction, attention, hiddenState] = slmGenerationModel._attentionModel.predict(input);
+    } else {
+      prediction = slmGenerationModel.predict(input);
+      attention = null;
+      hiddenState = null;
+    }
+    // --- Memory state visualization ---
+    if (hiddenState && hiddenState.arraySync) {
+      const stateArr = hiddenState.arraySync()[0]; // shape: [units]
+      // For heatmap, keep a rolling window of last N states
+      slmMemoryStates.push(stateArr);
+      if (slmMemoryStates.length > 10) slmMemoryStates.shift();
+      drawSLMMemoryHeatmap(slmMemoryStates);
+      // Debug log
+      console.log('SLM Memory State:', stateArr);
+    }
+    // --- Attention visualization ---
     if (attention && attention.arraySync) {
       const attnArr = attention.arraySync()[0]; // [seq, seq]
       if (Array.isArray(attnArr) && attnArr.length > 0) {
         slmAttentionWeights.push(attnArr.map(row => Array.isArray(row) ? row : [row]));
+        if (slmAttentionWeights.length > 10) slmAttentionWeights.shift();
         drawSLMAttentionMap(slmAttentionWeights);
+        // Debug log
+        console.log('SLM Attention:', attnArr);
       }
     }
     // Convert token to character
+    const nextToken = sampleWithTemperature(prediction, temperature);
     const nextChar = slmGenerationTokenizer.idToChar[nextToken];
     slmGeneratedText += nextChar;
     document.getElementById('slm-generated-display').textContent = slmGeneratedText;
@@ -627,6 +652,7 @@ async function generateSLMNextCharacter() {
     input.dispose();
     if (prediction.dispose) prediction.dispose();
     if (attention && attention.dispose) attention.dispose();
+    if (hiddenState && hiddenState.dispose) hiddenState.dispose();
   } catch (error) {
     console.error('SLM: Error generating next character:', error);
     pauseSLMGeneration();
@@ -634,10 +660,29 @@ async function generateSLMNextCharacter() {
 }
 
 function drawSLMMemoryHeatmap(states) {
-  const canvas = document.getElementById('slm-memory-heatmap');
-  if (!canvas || !states.length || !Array.isArray(states[0])) {
-    if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+  let canvas = document.getElementById('slm-memory-heatmap');
+  if (!states || !states.length || !Array.isArray(states[0])) {
+    if (canvas) canvas.style.display = 'none';
     return;
+  }
+  if (!canvas) {
+    canvas = document.createElement('canvas');
+    canvas.id = 'slm-memory-heatmap';
+    canvas.width = 400;
+    canvas.height = 120;
+    canvas.style.border = '1px solid #ccc';
+    canvas.style.background = '#fff';
+    canvas.style.display = 'block';
+    canvas.style.marginTop = '2em';
+    const label = document.createElement('label');
+    label.innerHTML = '<b>SLM Memory State (Hidden State) Heatmap</b>';
+    const container = document.getElementById('slm-vis') || document.getElementById('slm-container');
+    if (container) {
+      container.appendChild(label);
+      container.appendChild(canvas);
+    }
+  } else {
+    canvas.style.display = 'block';
   }
   const ctx = canvas.getContext('2d');
   const rows = states.length;
@@ -656,36 +701,96 @@ function drawSLMMemoryHeatmap(states) {
 }
 
 function drawSLMAttentionMap(attn) {
-  const canvas = document.getElementById('slm-attention-map');
-  if (!canvas || !attn.length || !Array.isArray(attn[0])) {
-    if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+  let canvas = document.getElementById('slm-attention-map');
+  if (!attn || !attn.length || !Array.isArray(attn[0])) {
+    if (canvas) canvas.style.display = 'none';
     return;
   }
-  // attn: [steps][seq][seq]
+  if (!canvas) return;
+  canvas.style.display = 'block';
   const ctx = canvas.getContext('2d');
   const rows = attn.length;
   const cols = attn[0].length;
   const cellWidth = canvas.width / cols;
   const cellHeight = canvas.height / rows;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Find min and max for normalization (optional, for color mapping)
+  let minV = Infinity, maxV = -Infinity;
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
-      // Average attention over all heads (if multi-head)
-      let v = Array.isArray(attn[y][x]) ? attn[y][x].reduce((a, b) => a + b, 0) / attn[y][x].length : attn[y][x];
-      ctx.fillStyle = `rgba(0,0,0,${v})`;
+      let v = attn[y][x];
+      if (v < minV) minV = v;
+      if (v > maxV) maxV = v;
+    }
+  }
+  // Prevent division by zero
+  if (maxV === minV) maxV = minV + 1e-6;
+
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      let v = attn[y][x];
+      // Normalize to [0,1]
+      let norm = (v - minV) / (maxV - minV);
+      // Amplify for visibility
+      let alpha = Math.min(1, norm * 2 + 0.1); // ensure not too faint
+      // Use a blue color map for better contrast
+      let blue = Math.floor(200 + 55 * norm);
+      let red = Math.floor(255 * (1 - norm));
+      let green = Math.floor(255 * (1 - norm));
+      ctx.fillStyle = `rgba(${red},${green},${blue},${alpha})`;
       ctx.fillRect(x * cellWidth, y * cellHeight, cellWidth, cellHeight);
     }
   }
+  // Draw border for debug
+  ctx.save();
+  ctx.strokeStyle = '#f00';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
+}
+
+// When clearing SLM state, also remove/hide the canvases
+function clearSLMVisualizations() {
+  const mem = document.getElementById('slm-memory-heatmap');
+  if (mem) mem.style.display = 'none';
+  const attn = document.getElementById('slm-attention-map');
+  if (attn) attn.style.display = 'none';
+  // Optionally remove the labels as well
+  if (mem && mem.previousSibling && mem.previousSibling.tagName === 'LABEL') mem.previousSibling.style.display = 'none';
+  if (attn && attn.previousSibling && attn.previousSibling.tagName === 'LABEL') attn.previousSibling.style.display = 'none';
 }
 
 // --- Main Training Function ---
 async function trainSLM() {
+  // Force WebGL backend for SLM training to avoid WASM kernel errors
+  if (tf.getBackend() !== 'webgl') {
+    await tf.setBackend('webgl');
+    await tf.ready();
+    console.log('SLM: Switched to WebGL backend for training');
+  }
   console.log('trainSLM called');
   
   const trainText = document.getElementById('slm-train-text').value.trim();
   const seqLength = parseInt(document.getElementById('slm-seq-length').value);
   const epochs = parseInt(document.getElementById('slm-epochs').value);
   const batchSize = parseInt(document.getElementById('slm-batch-size').value);
+
+  // Estimate parameter count for SLM model
+  // Embedding: vocabSize*32, LSTM: 4*(units*(units+input)), Dense: 32*32+32, Output: 32*vocabSize+vocabSize
+  // Use same logic as createSLMModel
+  const vocabSize = (trainText ? Array.from(new Set(trainText.split(''))).length + 4 : 50); // +4 for special tokens
+  const embedParams = vocabSize * 32;
+  const lstmParams = 4 * (32 * (32 + 32));
+  const denseParams = 32 * 32 + 32;
+  const outParams = 32 * vocabSize + vocabSize;
+  const totalParams = embedParams + lstmParams + denseParams + outParams;
+  const estMinutes = Math.max(1, Math.round((totalParams / 50000) * epochs * 0.2));
+
+  // Show modal and wait for user confirmation
+  await new Promise(resolve => {
+    window.showModelWarning(totalParams, estMinutes, resolve);
+  });
   
   console.log('SLM Training parameters:', { trainText: trainText.substring(0, 50) + '...', seqLength, epochs, batchSize });
   
@@ -738,7 +843,12 @@ async function trainSLM() {
       updateSLMTrainingVisualization(epoch, loss);
       updateSLMMetricsDisplay(epoch, loss, minLoss);
       updateSLMProgressBar(epoch, epochs);
-      status.textContent = `Epoch ${epoch}/${epochs}: Loss=${loss.toFixed(4)}, Min=${minLoss.toFixed(4)}, LR=${lr.toFixed(6)}`;
+      let statusMsg = `Epoch ${epoch}/${epochs}: Loss=${loss.toFixed(4)}, Min=${minLoss.toFixed(4)}, LR=${lr.toFixed(6)}`;
+      // If loss is not improving much, suggest more data or epochs
+      if (epoch > 5 && Math.abs(loss - minLoss) < 0.01) {
+        statusMsg += ' (Tip: Loss is not improving much. Try more data or more epochs for better results.)';
+      }
+      status.textContent = statusMsg;
     });
     
     // Clean up tensors
