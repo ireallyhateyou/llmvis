@@ -211,32 +211,6 @@ And by opposing end them.</textarea>
     <!-- No static canvases here; they will be created dynamically -->
   </div>
   
-  <div id="rwkv-container" style="display: none;">
-    <h2>RWKV (RNN-Transformer Hybrid)</h2>
-    <label for="rwkv-train-text">Training Text:</label>
-    <textarea id="rwkv-train-text" placeholder="Enter training text...">Roses are red,
-Violets are blue,
-I love Hack Club
-and so should you!</textarea>
-    <div class="rwkv-controls">
-      <div class="control-group">
-        <label for="rwkv-epochs">Epochs:</label>
-        <input type="number" id="rwkv-epochs" value="20" min="1" max="100">
-      </div>
-      <div class="control-group">
-        <label for="rwkv-batch-size">Batch Size:</label>
-        <input type="number" id="rwkv-batch-size" value="8" min="4" max="32">
-      </div>
-      <div class="control-group">
-        <label for="rwkv-seq-length">Sequence Length:</label>
-        <input type="number" id="rwkv-seq-length" value="15" min="5" max="50">
-      </div>
-    </div>
-    <button onclick="trainRWKV()">Train Model</button>
-    <div id="rwkv-status"></div>
-    <div id="rwkv-vis"></div>
-  </div>
-  
   <div id="gpt2-container" class="model-container" style="display: none; margin: 2em auto; padding: 2em; border: 2px solid #000000; border-radius: 8px; background: #ffffff; font-family: 'Times New Roman', serif; max-width: 800px; width: 90%; text-align: center;">
     <h2 style="text-align:center;">GPT-2 Visualizer</h2>
     <div id="model-load-row" style="margin-bottom:1em; display: flex; flex-direction: column; align-items: center;">
@@ -375,8 +349,7 @@ and so should you!</textarea>
         seqLength.value = '20';   // Shorter sequences for browser
         epochs.value = '20';      // Conservative epochs for browser
         batchSize.value = '4';    // Smaller batch size for browser
-        
-                  showPopupAlert('Shakespeare mode enabled! Using browser-optimized model with 64+32 LSTM units.');
+        showPopupAlert('Shakespeare mode enabled! Using browser-optimized model with 64+32 LSTM units.');
       } else {
         // Reset to default values
         trainText.value = '';
@@ -385,7 +358,7 @@ and so should you!</textarea>
         batchSize.value = '32';
         
         showPopupAlert('Standard mode enabled.');
-      }x
+      }
     }
 
     // Collapsible tree state

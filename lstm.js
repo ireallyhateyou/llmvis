@@ -1164,3 +1164,339 @@ async function trainLSTM() {
     showPopupAlert('Training failed: ' + error.message);
   }
 } 
+
+// --- LSTM Memory State Visualization ---
+function drawLSTMMemoryHeatmap(states) {
+  let canvas = document.getElementById('lstm-memory-heatmap');
+  if (!states || !states.length || !Array.isArray(states[0])) {
+    if (canvas) canvas.style.display = 'none';
+    return;
+  }
+  if (!canvas) {
+    canvas = document.createElement('canvas');
+    canvas.id = 'lstm-memory-heatmap';
+    canvas.width = 400;
+    canvas.height = 120;
+    canvas.style.border = '1px solid #ccc';
+    canvas.style.background = '#fff';
+    canvas.style.display = 'block';
+    canvas.style.marginTop = '2em';
+    const label = document.createElement('label');
+    label.innerHTML = '<b>LSTM Memory State (Hidden State) Heatmap</b>';
+    const container = document.getElementById('lstm-vis') || document.getElementById('lstm-container');
+    if (container) {
+      container.appendChild(label);
+      container.appendChild(canvas);
+    }
+  } else {
+    canvas.style.display = 'block';
+  }
+  const ctx = canvas.getContext('2d');
+  const rows = states.length;
+  const cols = states[0].length;
+  const cellWidth = canvas.width / cols;
+  const cellHeight = canvas.height / rows;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const v = states[y][x];
+      const norm = (v + 1) / 2;
+      ctx.fillStyle = `rgba(0,0,0,${norm})`;
+      ctx.fillRect(x * cellWidth, y * cellHeight, cellWidth, cellHeight);
+    }
+  }
+}
+
+// --- LSTM Model with returnState for Generation ---
+function createLSTMModelWithState(seqLength, vocabSize) {
+  const input = tf.input({shape: [seqLength, vocabSize]});
+  const lstm = tf.layers.lstm({
+    units: 128,
+    returnSequences: true,
+    returnState: true,
+    dropout: 0.2,
+    recurrentDropout: 0.2,
+    kernelInitializer: 'glorotNormal'
+  });
+  const lstmOut = lstm.apply(input);
+  const lstmSeq = Array.isArray(lstmOut) ? lstmOut[0] : lstmOut;
+  const lstmHidden = Array.isArray(lstmOut) ? lstmOut[1] : null;
+  const dense = tf.layers.dense({
+    units: vocabSize,
+    activation: 'softmax',
+    kernelInitializer: 'glorotNormal'
+  }).apply(lstmSeq);
+  const model = tf.model({inputs: input, outputs: [dense, lstmHidden]});
+  model.compile({
+    loss: 'categoricalCrossentropy',
+    optimizer: tf.train.adam(0.01),
+    metrics: ['accuracy']
+  });
+  return model;
+}
+
+// --- LSTM Generation Visualization with Memory Heatmap ---
+let lstmMemoryStates = [];
+
+function initLSTMGenerationVisualizationWithMemory() {
+  const visContainer = document.getElementById('lstm-vis');
+  if (!visContainer) return;
+  // Remove any existing generation visualization
+  const existingGenViz = visContainer.querySelector('.generation-viz-container');
+  if (existingGenViz) {
+    existingGenViz.remove();
+  }
+  // Add generation visualization section
+  const genVizSection = document.createElement('div');
+  genVizSection.className = 'generation-viz-container';
+  genVizSection.innerHTML = `
+    <h3>Real-Time Text Generation</h3>
+    <div class="generation-controls">
+      <div class="input-group">
+        <label for="generation-seed">Seed Text:</label>
+        <input type="text" id="generation-seed" placeholder="To be, or not to be" value="To be, or not to be" style="width: 300px;">
+        <small id="seed-note" style="color:#888;display:block;">Only the first <span id="seq-len-note"></span> characters will be used as seed.</small>
+      </div>
+      <div class="input-group">
+        <label for="generation-length">Length:</label>
+        <input type="number" id="generation-length" value="50" min="10" max="200">
+      </div>
+      <div class="input-group">
+        <label for="generation-temp">Temperature:</label>
+        <input type="number" id="generation-temp" value="0.8" min="0.1" max="2" step="0.1">
+      </div>
+      <div class="input-group">
+        <label for="generation-speed">Speed:</label>
+        <input type="range" id="generation-speed" min="50" max="500" value="200">
+        <span id="speed-value">200ms</span>
+      </div>
+    </div>
+    <div class="generation-display">
+      <div class="seed-text-container">
+        <label>Seed Text Used:</label>
+        <div id="seed-display" class="seed-display"></div>
+      </div>
+      <div class="generation-container">
+        <label>Generated Text:</label>
+        <div id="generation-display" class="generation-display"></div>
+      </div>
+      <div class="prediction-container">
+        <label>Next Character Prediction:</label>
+        <div id="prediction-display" class="prediction-display"></div>
+      </div>
+    </div>
+    <div class="generation-controls">
+      <button id="start-generation" class="gen-btn">Start Generation</button>
+      <button id="pause-generation" class="gen-btn" disabled>Pause</button>
+      <button id="reset-generation" class="gen-btn">Reset</button>
+    </div>
+    <div style="margin-top:2em;">
+      <label><b>LSTM Memory State (Hidden State) Heatmap</b></label>
+      <canvas id="lstm-memory-heatmap" width="400" height="120"></canvas>
+    </div>
+  `;
+  visContainer.appendChild(genVizSection);
+  // Add event listeners (reuse from previous logic)
+  const startBtn = document.getElementById('start-generation');
+  const pauseBtn = document.getElementById('pause-generation');
+  const resetBtn = document.getElementById('reset-generation');
+  const speedSlider = document.getElementById('generation-speed');
+  const speedValue = document.getElementById('speed-value');
+  // Show seqLength in note
+  const seqLenNote = document.getElementById('seq-len-note');
+  if (seqLenNote) seqLenNote.textContent = window.seqLength || 15;
+  if (startBtn) {
+    startBtn.onclick = () => startLSTMGenerationWithMemory();
+  }
+  if (pauseBtn) {
+    pauseBtn.onclick = () => pauseLSTMGenerationWithMemory();
+  }
+  if (resetBtn) {
+    resetBtn.onclick = () => resetLSTMGenerationWithMemory();
+  }
+  if (speedSlider) {
+    speedSlider.oninput = (e) => {
+      speedValue.textContent = e.target.value + 'ms';
+    };
+  }
+}
+
+let lstmGenTimer = null;
+let lstmGenCurrentText = '';
+let lstmGenSeedText = '';
+
+function startLSTMGenerationWithMemory() {
+  if (!window.lstmModel || !window.charToIdx || !window.idxToChar) {
+    showPopupAlert('Train the model first!');
+    return;
+  }
+  const seedInput = document.getElementById('generation-seed');
+  if (!seedInput || !seedInput.value) {
+    showPopupAlert('Enter a seed text first!');
+    return;
+  }
+  const startBtn = document.getElementById('start-generation');
+  const pauseBtn = document.getElementById('pause-generation');
+  const seedDisplay = document.getElementById('seed-display');
+  const generationDisplay = document.getElementById('generation-display');
+  const predictionDisplay = document.getElementById('prediction-display');
+  if (startBtn) startBtn.disabled = true;
+  if (pauseBtn) pauseBtn.disabled = false;
+  // Sanitize the seed
+  const rawSeed = seedInput.value;
+  const sanitizedSeed = sanitizeSeed(rawSeed, window.charToIdx);
+  lstmGenSeedText = sanitizedSeed.slice(0, window.seqLength);
+  lstmGenCurrentText = lstmGenSeedText;
+  lstmMemoryStates = [];
+  if (seedDisplay) {
+    seedDisplay.textContent = lstmGenSeedText;
+    seedDisplay.className = 'seed-display active';
+  }
+  if (generationDisplay) {
+    generationDisplay.textContent = '';
+    generationDisplay.className = 'generation-display active';
+  }
+  if (predictionDisplay) {
+    predictionDisplay.innerHTML = '';
+    predictionDisplay.className = 'prediction-display active';
+  }
+  // Start generation loop
+  lstmGenTimer = setInterval(() => {
+    generateNextLSTMCharacterWithMemory();
+  }, parseInt(document.getElementById('generation-speed').value));
+}
+
+function pauseLSTMGenerationWithMemory() {
+  const startBtn = document.getElementById('start-generation');
+  const pauseBtn = document.getElementById('pause-generation');
+  if (startBtn) startBtn.disabled = false;
+  if (pauseBtn) pauseBtn.disabled = true;
+  if (lstmGenTimer) {
+    clearInterval(lstmGenTimer);
+  }
+}
+
+function resetLSTMGenerationWithMemory() {
+  pauseLSTMGenerationWithMemory();
+  lstmGenCurrentText = '';
+  lstmGenSeedText = '';
+  lstmMemoryStates = [];
+  const seedDisplay = document.getElementById('seed-display');
+  const generationDisplay = document.getElementById('generation-display');
+  const predictionDisplay = document.getElementById('prediction-display');
+  if (seedDisplay) {
+    seedDisplay.textContent = '';
+    seedDisplay.className = 'seed-display';
+  }
+  if (generationDisplay) {
+    generationDisplay.textContent = '';
+    generationDisplay.className = 'generation-display';
+  }
+  if (predictionDisplay) {
+    predictionDisplay.innerHTML = '';
+    predictionDisplay.className = 'prediction-display';
+  }
+  drawLSTMMemoryHeatmap([]);
+}
+
+async function generateNextLSTMCharacterWithMemory() {
+  if (!window.lstmModel || !window.charToIdx || !window.idxToChar) {
+    console.error('Missing global variables for generation');
+    return;
+  }
+  try {
+    if (!lstmGenCurrentText || typeof lstmGenCurrentText !== 'string' || lstmGenCurrentText.length === 0) {
+      showPopupAlert('Seed/context is empty. Please reset and try again.');
+      pauseLSTMGenerationWithMemory();
+      return;
+    }
+    const inputIndices = textToIndices(lstmGenCurrentText, window.charToIdx);
+    const seqLength = window.seqLength || 15;
+    const vocabSize = Array.isArray(window.idxToChar) ? window.idxToChar.length : Object.keys(window.idxToChar).length;
+    let paddedIndices = [...inputIndices];
+    if (paddedIndices.length < seqLength) {
+      const padChar = paddedIndices[0] || 0;
+      while (paddedIndices.length < seqLength) {
+        paddedIndices.unshift(padChar);
+      }
+    }
+    if (paddedIndices.length > seqLength) {
+      paddedIndices = paddedIndices.slice(-seqLength);
+    }
+    if (paddedIndices.some(i => typeof i !== 'number' || isNaN(i) || i < 0 || i >= vocabSize)) {
+      console.error('Invalid input indices:', paddedIndices);
+      showPopupAlert('Invalid input indices detected. Please check your seed and training text.');
+      pauseLSTMGenerationWithMemory();
+      return;
+    }
+    // Prepare input tensor
+    const inputTensor = tf.tidy(() => {
+      const x = tf.buffer([1, seqLength, vocabSize]);
+      for (let t = 0; t < seqLength; ++t) {
+        const charIdx = paddedIndices[t];
+        if (charIdx >= 0 && charIdx < vocabSize) {
+          x.set(1, 0, t, charIdx);
+        }
+      }
+      return x.toTensor();
+    });
+    // Predict next char and get hidden state
+    let preds, hiddenState;
+    if (window.lstmModel.outputs.length === 2) {
+      [preds, hiddenState] = window.lstmModel.predict(inputTensor);
+    } else {
+      preds = window.lstmModel.predict(inputTensor);
+      hiddenState = null;
+    }
+    if (!preds || preds.length === 0) {
+      console.error('Model returned empty predictions');
+      showPopupAlert('Model returned empty predictions. Please retrain the model.');
+      pauseLSTMGenerationWithMemory();
+      return;
+    }
+    if (preds.some(p => !isFinite(p))) {
+      console.error('Model returned NaN or infinite predictions:', preds);
+      showPopupAlert('Model returned invalid predictions. Please retrain the model.');
+      pauseLSTMGenerationWithMemory();
+      return;
+    }
+    let nextIdx = sampleWithTemperatureImproved(preds.dataSync(), 0.8);
+    const vocabLen = Array.isArray(window.idxToChar) ? window.idxToChar.length : Object.keys(window.idxToChar).length;
+    if (typeof nextIdx !== 'number' || isNaN(nextIdx) || nextIdx < 0 || nextIdx >= vocabLen) {
+      let maxProb = -Infinity, maxIdx = 0;
+      for (let i = 0; i < preds.length && i < vocabLen; ++i) {
+        if (preds[i] > maxProb) {
+          maxProb = preds[i];
+          maxIdx = i;
+        }
+      }
+      nextIdx = maxIdx;
+    }
+    const nextChar = window.idxToChar[nextIdx] || '?';
+    if (!nextChar || nextChar === '?') {
+      showPopupAlert('Model generated an invalid character ("?"). Generation stopped. Try training with more data, more epochs, or a slightly larger model if you still see this popup.');
+      pauseLSTMGenerationWithMemory();
+      return;
+    }
+    lstmGenCurrentText += nextChar;
+    if (lstmGenCurrentText.length > seqLength) {
+      lstmGenCurrentText = lstmGenCurrentText.slice(1);
+    }
+    // Update displays
+    updateGenerationDisplays(nextChar, preds.dataSync(), nextIdx);
+    // Store and draw memory state
+    if (hiddenState && hiddenState.arraySync) {
+      const stateArr = hiddenState.arraySync()[0];
+      lstmMemoryStates.push(stateArr);
+      if (lstmMemoryStates.length > 10) lstmMemoryStates.shift();
+      drawLSTMMemoryHeatmap(lstmMemoryStates);
+    }
+    tf.dispose(inputTensor);
+    if (preds.dispose) preds.dispose();
+    if (hiddenState && hiddenState.dispose) hiddenState.dispose();
+  } catch (error) {
+    console.error('Generation error:', error);
+    showPopupAlert('Generation error: ' + error.message);
+    pauseLSTMGenerationWithMemory();
+  }
+} 
