@@ -89,7 +89,6 @@
         <option value="eliza" selected>ELIZA</option>
         <option value="markov">Markov Chain</option>
         <option value="lstm">Long Short-Term Memory (LSTM)</option>
-        <option value="slm">Small Language Model (SLM)</option>
         <option value="gpt2">GPT-2</option>
       </select>
     </div>
@@ -97,6 +96,9 @@
   
   <div id="markov-container" style="display: none;">
     <h2>Markov Chain</h2>
+    <div style="text-align:center; margin-bottom:0.5em;">
+      <a href="#" id="markov-learn-link" style="font-size:0.95em; color:#111; text-decoration:none; cursor:pointer;">(learn about this model)</a>
+    </div>
     <form id="markov-form" autocomplete="off" onsubmit="return false;">
       <textarea id="inputText" rows="6" cols="60" placeholder="Paste your training text here..." style="flex-basis:100%;">Our ships are wrecked beneath the wave,
 But our hearts will find no grave.</textarea>
@@ -120,10 +122,20 @@ But our hearts will find no grave.</textarea>
     </form>
     <canvas id="graphCanvas" style="display: none; margin-top:2em; background:#fff; border:1px solid #eee;"></canvas>
   </div>
+
+  <!-- Markov Info Popup -->
+  <div id="markov-info-popup" style="display:none; position:fixed; z-index:10001; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.35); align-items:center; justify-content:center;">
+    <div style="background:#fff; padding:2em 2.5em; border-radius:10px; box-shadow:0 2px 16px #0003; max-width:90vw; width:400px; text-align:left; position:relative;">
+      <span id="markov-info-close" style="position:absolute; top:0.5em; right:1em; font-size:2em; color:#888; cursor:pointer;">&times;</span>
+      <div style="font-size:1.1em;">
+        <b>Markov chains</b> are a type of probabilistic model where the next state only depends on the current state. Training involves observing a list of states, counting how often transitions happen, and converting those into probabilities. With this information, you can simulate future states and generate sequences. Their most notable use in terms of NLP was the Google PageRank algorithm.
+      </div>
+    </div>
+  </div>
   
   <div id="eliza-container" style="display: block;">
     <h2>ELIZA</h2>
-    <div style="text-align:center;">
+    <div style="text-align:center; margin-bottom:0.5em;">
       <a href="#" id="eliza-learn-link" style="font-size:0.95em; color:#111; text-decoration:none; cursor:pointer;">(learn about this model)</a>
     </div>
     <div id="eliza-chat-area">
@@ -149,6 +161,9 @@ But our hearts will find no grave.</textarea>
   
       <div id="lstm-container" style="display: none;">
     <h2>Long Short-Term Memory (LSTM)</h2>
+    <div style="text-align:center; margin-bottom:0.5em;">
+      <a href="#" id="lstm-learn-link" style="font-size:0.95em; color:#111; text-decoration:none; cursor:pointer;">(learn about this model)</a>
+    </div>
     
     <label for="lstm-train-text">Training Text:</label>
     <textarea id="lstm-train-text" placeholder="Enter training text or use Shakespeare corpus...">To be, or not to be, that is the question:
@@ -180,37 +195,28 @@ And by opposing end them.</textarea>
     <div id="lstm-vis"></div>
   </div>
 
-  <div id="slm-container" style="display: none;">
-    <h2>Small Language Model (SLM)</h2>
-    <label for="slm-train-text">Training Text:</label>
-    <textarea id="slm-train-text" class="lstm-train-text" placeholder="Enter training text...">To be, or not to be, that is the question:
-Whether 'tis nobler in the mind to suffer
-The slings and arrows of outrageous fortune,
-Or to take arms against a sea of troubles
-And by opposing end them.</textarea>
-    <!-- Default seed text for SLM generation, editable from HTML -->
-    <input type="hidden" id="slm-default-seed" value="To be, or not to be">
-    <div class="slm-controls lstm-controls">
-      <div class="control-group">
-        <label for="slm-epochs">Epochs:</label>
-        <input type="number" id="slm-epochs" value="40" min="1" max="100">
-      </div>
-      <div class="control-group">
-        <label for="slm-batch-size">Batch Size:</label>
-        <input type="number" id="slm-batch-size" value="16" min="4" max="32">
-      </div>
-      <div class="control-group">
-        <label for="slm-seq-length">Sequence Length:</label>
-        <input type="number" id="slm-seq-length" value="30" min="5" max="50">
+  <!-- LSTM Info Popup -->
+  <div id="lstm-info-popup" style="display:none; position:fixed; z-index:10001; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.35); align-items:center; justify-content:center;">
+    <div style="background:#fff; padding:2em 2.5em; border-radius:10px; box-shadow:0 2px 16px #0003; max-width:90vw; width:440px; text-align:left; position:relative;">
+      <span id="lstm-info-close" style="position:absolute; top:0.5em; right:1em; font-size:2em; color:#888; cursor:pointer;">&times;</span>
+      <div style="font-size:1.1em;">
+        <b>An LSTM</b> is a type of Recurrent Neural Network (RNN) built to handle sequences (text in this case) with some form of long-term memory. Unlike prior models like Markov Chains, who only look at the current state, an LSTM uses a memory cell and a hidden state that progressively gets updated which allows it to learn context from said sequence.<br><br>
+        <b>During training:</b><br>
+        <ul style="margin-left:1.2em;">
+          <li>The training text (as a sequence) is converted into numbers, this is <b>tokenization</b>;</li>
+          <li>We train the LSTM to predict the next token through input-target pairs;</li>
+          <li>A <a href="https://michael-franke.github.io/npNLG/06-LSTMs/06b-LSTM-minimal-forward-pass.html" target="_blank" rel="noopener" style="color:#1976d2;text-decoration:underline;">forward pass</a> turns tokens into vectors (embedding), processes them while maintaining a hidden state and memory (LSTM layer), and outputs a probability distribution for possible next words. This is done over the span of <b>epochs</b>;</li>
+          <li>During this, <b>cross-entropy loss</b> is calculated for the difference between the predicted next word and the actual target word. <b>The higher the loss, the worse the prediction while the loss is lower for correct predictions</b></li>
+        </ul>
       </div>
     </div>
-    <button onclick="trainSLM()">Train Model</button>
-    <div id="slm-status"></div>
-    <div id="slm-vis"></div>
   </div>
-  
+
   <div id="gpt2-container" class="model-container" style="display: none; margin: 2em auto; padding: 2em; border: 2px solid #000000; border-radius: 8px; background: #ffffff; font-family: 'Times New Roman', serif; max-width: 800px; width: 90%; text-align: center;">
     <h2 style="text-align:center;">GPT-2 Attention</h2>
+    <div style="text-align:center; margin-bottom:0.5em;">
+      <a href="#" id="gpt2-learn-link" style="font-size:0.95em; color:#111; text-decoration:none; cursor:pointer;">(learn about this model)</a>
+    </div>
     <div id="model-load-row" style="margin-bottom:1em; display: flex; flex-direction: column; align-items: center;">
       <button id="attn-load-model-btn" style="padding:0.5em 1em;font-weight:bold;display:flex;flex-direction:column;align-items:center;">
         <span>Load Model</span>
@@ -221,12 +227,10 @@ And by opposing end them.</textarea>
     <div style="margin-bottom:1em;">
       <input id="attn-prompt" type="text" value="The girl's paper ship was wrecked in the storm." style="width:60%">
     </div>
-    <div style="margin-bottom:1em;">
+    <div style="display: flex; align-items: center; justify-content: center; gap: 1em; margin-bottom: 1em;">
       <button id="attn-run-btn" disabled>Visualize Attention</button>
-    </div>
-    <div style="margin-bottom:1em;">
-      <label style="display:block; margin-bottom:0.5em;">Layer: <input id="attn-layer" type="number" min="0" max="11" value="0" style="width:3em"></label>
-      <label style="display:block;">Head: <input id="attn-head" type="number" min="0" max="11" value="0" style="width:3em"></label>
+      <label style="margin: 0;">Layer: <input id="attn-layer" type="number" min="0" max="11" value="0" style="width:3em"></label>
+      <label style="margin: 0;">Head: <input id="attn-head" type="number" min="0" max="11" value="0" style="width:3em"></label>
     </div>
     <div id="attn-tokens"></div>
     <div style="display:flex; flex-direction:column; align-items:center;">
@@ -236,13 +240,30 @@ And by opposing end them.</textarea>
     <div id="attn-status"></div>
   </div>
 
+  <!-- GPT-2 Info Popup -->
+  <div id="gpt2-info-popup" style="display:none; position:fixed; z-index:10001; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.35); align-items:center; justify-content:center;">
+    <div style="background:#fff; padding:2em 2.5em; border-radius:10px; box-shadow:0 2px 16px #0003; max-width:90vw; width:440px; text-align:left; position:relative;">
+      <span id="gpt2-info-close" style="position:absolute; top:0.5em; right:1em; font-size:2em; color:#888; cursor:pointer;">&times;</span>
+      <div style="font-size:1.1em;">
+        <b>LLMs like GPT-2</b> use self-attention, meaning that each word looks at previous words and decides how much to focus to make its output. It does this multiple times, making it multi-headed. GPT-2 has up to 48 attention layers which:
+        <ul style="margin-left:1.2em;">
+          <li>Converts tokens into a vector,</li>
+          <li>Creates QKV values for linear transformation, <b>Q</b>: What am I looking for?; <b>K</b>: What features do I have?; <b>V</b>: What information do I carry?.</li>
+          <li>The dot products of Q and K are calculated through (matrix math I don't have time to explain right now <a href="https://www.billparker.ai/2024/10/transformer-attention-simple-guide-to-q.html" target="_blank" rel="noopener" style="color:#1976d2;text-decoration:underline;">see this guide</a>).</li>
+        </ul>
+        <b>Why is this so groundbreaking?</b><br>
+        This is the entire premise of the (<i>Attention is all you need</i> <a href="https://arxiv.org/pdf/1706.03762" target="_blank" rel="noopener" style="color:#1976d2;text-decoration:underline;">paper</a>), which paved the way for LLMs, for better and for worse.
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
   <script type="module" src="gpt2-attn.js"></script>
   <script src="markov.js"></script>
       <script src="elizabot.js"></script>
     <script src="eliza.js"></script>
-    <script src="slm.js"></script>
+    <script src="lstm.js"></script>
 
   <script>
     // Model picker logic
@@ -250,7 +271,6 @@ And by opposing end them.</textarea>
     const markovContainer = document.getElementById('markov-container');
     const elizaContainer = document.getElementById('eliza-container');
     const lstmContainer = document.getElementById('lstm-container');
-    const slmContainer = document.getElementById('slm-container');
     const gpt2Container = document.getElementById('gpt2-container');
     
     modelPicker.addEventListener('change', function() {
@@ -258,35 +278,21 @@ And by opposing end them.</textarea>
         markovContainer.style.display = 'none';
         elizaContainer.style.display = 'block';
         lstmContainer.style.display = 'none';
-        slmContainer.style.display = 'none';
         gpt2Container.style.display = 'none';
       } else if (this.value === 'markov') {
         markovContainer.style.display = 'block';
         elizaContainer.style.display = 'none';
         lstmContainer.style.display = 'none';
-        slmContainer.style.display = 'none';
         gpt2Container.style.display = 'none';
       } else if (this.value === 'lstm') {
         markovContainer.style.display = 'none';
         elizaContainer.style.display = 'none';
         lstmContainer.style.display = 'block';
-        slmContainer.style.display = 'none';
-        gpt2Container.style.display = 'none';
-      } else if (this.value === 'slm') {
-        markovContainer.style.display = 'none';
-        elizaContainer.style.display = 'none';
-        lstmContainer.style.display = 'none';
-        slmContainer.style.display = 'block';
-        // Initialize SLM visualization when selected
-        if (window.initSLMVisualization) {
-          window.initSLMVisualization();
-        }
         gpt2Container.style.display = 'none';
       } else if (this.value === 'gpt2') {
         markovContainer.style.display = 'none';
         elizaContainer.style.display = 'none';
         lstmContainer.style.display = 'none';
-        slmContainer.style.display = 'none';
         gpt2Container.style.display = 'block';
         // Initialize GPT-2 UI when selected
         if (window.initGPT2UI) {
@@ -664,7 +670,7 @@ And by opposing end them.</textarea>
         return tokenizer.decode(tokens, { skip_special_tokens: true });
     };
     
-    console.log('GPT-2 tokenizer loaded successfully');
+    console.log('GPT-2 tokenizer loaded without epic fail');
     
     // Test the tokenizer
     const testText = "Hello world";
@@ -694,6 +700,54 @@ And by opposing end them.</textarea>
         // Optional: close popup when clicking outside the content
         popup.onclick = function(e) {
           if (e.target === popup) popup.style.display = 'none';
+        };
+      }
+      // Markov info popup logic
+      var markovLearnLink = document.getElementById('markov-learn-link');
+      var markovPopup = document.getElementById('markov-info-popup');
+      var markovCloseBtn = document.getElementById('markov-info-close');
+      if (markovLearnLink && markovPopup && markovCloseBtn) {
+        markovLearnLink.onclick = function(e) {
+          e.preventDefault();
+          markovPopup.style.display = 'flex';
+        };
+        markovCloseBtn.onclick = function() {
+          markovPopup.style.display = 'none';
+        };
+        markovPopup.onclick = function(e) {
+          if (e.target === markovPopup) markovPopup.style.display = 'none';
+        };
+      }
+      // LSTM info popup logic
+      var lstmLearnLink = document.getElementById('lstm-learn-link');
+      var lstmPopup = document.getElementById('lstm-info-popup');
+      var lstmCloseBtn = document.getElementById('lstm-info-close');
+      if (lstmLearnLink && lstmPopup && lstmCloseBtn) {
+        lstmLearnLink.onclick = function(e) {
+          e.preventDefault();
+          lstmPopup.style.display = 'flex';
+        };
+        lstmCloseBtn.onclick = function() {
+          lstmPopup.style.display = 'none';
+        };
+        lstmPopup.onclick = function(e) {
+          if (e.target === lstmPopup) lstmPopup.style.display = 'none';
+        };
+      }
+      // GPT-2 info popup logic
+      var gpt2LearnLink = document.getElementById('gpt2-learn-link');
+      var gpt2Popup = document.getElementById('gpt2-info-popup');
+      var gpt2CloseBtn = document.getElementById('gpt2-info-close');
+      if (gpt2LearnLink && gpt2Popup && gpt2CloseBtn) {
+        gpt2LearnLink.onclick = function(e) {
+          e.preventDefault();
+          gpt2Popup.style.display = 'flex';
+        };
+        gpt2CloseBtn.onclick = function() {
+          gpt2Popup.style.display = 'none';
+        };
+        gpt2Popup.onclick = function(e) {
+          if (e.target === gpt2Popup) gpt2Popup.style.display = 'none';
         };
       }
     });

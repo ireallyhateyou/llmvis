@@ -876,7 +876,6 @@ async function generateNextCharacter() {
   }
 }
 
-// --- FIXED: Improved sampling function based on successful examples ---
 function sampleWithTemperatureImproved(logits, temperature) {
   // Convert to array and handle edge cases
   let logitsArr = Array.from(logits);

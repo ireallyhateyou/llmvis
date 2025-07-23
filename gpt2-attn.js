@@ -36,13 +36,12 @@ function setSpinner(visible, msg = "Loading...") {
 }
 
 function setModelProgress(percent) {
-  const progress = document.getElementById("attn-model-progress");
+  const runBtn = document.getElementById("attn-run-btn");
+  if (!runBtn) return;
   if (percent === null) {
-    progress.style.display = "none";
-    progress.textContent = "";
+    runBtn.textContent = "Visualize Attention";
   } else {
-    progress.style.display = "inline";
-    progress.textContent = `Downloading: ${percent}%`;
+    runBtn.textContent = `Downloading: ${percent}%`;
   }
 }
 
@@ -52,6 +51,8 @@ async function loadModel() {
   setStatus("Loading model and tokenizer...");
   setSpinner(true, "Downloading model...");
   setModelProgress(0);
+  const runBtn = document.getElementById("attn-run-btn");
+  if (runBtn) runBtn.disabled = true;
   try {
     // Download ONNX model as ArrayBuffer with progress
     const response = await fetch(MODEL_URL);
@@ -93,12 +94,16 @@ async function loadModel() {
     modelLoaded = true;
     setStatus("Model and tokenizer loaded. Ready to visualize.");
     setSpinner(false);
-    document.getElementById("attn-run-btn").disabled = false;
+    if (runBtn) {
+      runBtn.disabled = false;
+      runBtn.textContent = "Visualize Attention";
+    }
     document.getElementById("attn-load-model-btn").disabled = true;
   } catch (e) {
     setStatus("Failed to load model: " + e.message, true);
     setSpinner(false);
     setModelProgress(null);
+    if (runBtn) runBtn.disabled = true;
     modelLoading = false;
   }
 }
@@ -203,7 +208,6 @@ async function run() {
   setSpinner(false);
   drawHeatmap(attn, tokens);
   drawGraph(attn, tokens);
-  setStatus("Done!");
   btn.disabled = false;
 }
 
@@ -289,15 +293,6 @@ function drawHeatmap(attn, tokens) {
       .attr("font-size", "10px")
       .attr("fill", "#333")
       .text(t);
-    
-    // Add token number below the token
-    g.append("text")
-      .attr("x", i * cellSize + cellSize / 2)
-      .attr("y", size + 30)
-      .attr("text-anchor", "middle")
-      .attr("font-size", "8px")
-      .attr("fill", "#666")
-      .text(`#${i}`);
   });
   
   // Add token labels on y-axis (left)
@@ -309,15 +304,6 @@ function drawHeatmap(attn, tokens) {
       .attr("font-size", "10px")
       .attr("fill", "#333")
       .text(t);
-    
-    // Add token number to the left of the token
-    g.append("text")
-      .attr("x", -20)
-      .attr("y", i * cellSize + cellSize / 2 + 4)
-      .attr("text-anchor", "end")
-      .attr("font-size", "8px")
-      .attr("fill", "#666")
-      .text(`#${i}`);
   });
   
   // Add color legend
@@ -458,15 +444,6 @@ function drawGraph(attn, tokens) {
       .attr("font-weight", "bold")
       .attr("fill", "#333")
       .text(t);
-    
-    // Token number
-    g.append("text")
-      .attr("x", (i + 1) * nodeSpacing)
-      .attr("y", nodeY + 40)
-      .attr("text-anchor", "middle")
-      .attr("font-size", "9px")
-      .attr("fill", "#666")
-      .text(`#${i}`);
   });
   
   // Add legend
@@ -506,3 +483,9 @@ function drawGraph(attn, tokens) {
 
 document.getElementById("attn-load-model-btn").onclick = loadModel;
 document.getElementById("attn-run-btn").onclick = run; 
+
+// Ensure the Visualize Attention button is always disabled on page load
+window.addEventListener('DOMContentLoaded', function() {
+  const runBtn = document.getElementById('attn-run-btn');
+  if (runBtn) runBtn.disabled = true;
+}); 
