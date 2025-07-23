@@ -1034,7 +1034,7 @@ async function trainLSTM() {
   const seqLength = parseInt(document.getElementById('lstm-seq-length').value);
   const epochs = parseInt(document.getElementById('lstm-epochs').value);
   const batchSize = parseInt(document.getElementById('lstm-batch-size').value);
-  const shakespeareMode = document.getElementById('shakespeare-mode').checked;
+  const shakespeareMode = window.shakespeareMode;
 
   // Estimate parameter count for LSTM model (do this BEFORE model creation)
   const chars = [...new Set(trainText)].sort();
@@ -1059,17 +1059,21 @@ async function trainLSTM() {
   if (typeof window.showModelWarning === 'function') {
     // Ensure modal is closed before proceeding
     await new Promise(resolve => {
-      window.showModelWarning(totalParams, estMinutes, () => {
-        // Force close modal in case it's still visible
-        const modal = document.getElementById('model-warning-modal');
-        if (modal) modal.style.display = 'none';
-        setTimeout(resolve, 0); // allow DOM to update
-      });
+      window.showModelWarning(
+        totalParams,
+        estMinutes,
+        () => {
+          const modal = document.getElementById('model-warning-modal');
+          if (modal) modal.style.display = 'none';
+          setTimeout(resolve, 0); // allow DOM to update
+        },
+        '(by the way, expect gibberish given the small training text)'
+      );
     });
     console.log('User closed model warning modal, proceeding to ALL TensorFlow.js code');
   } else {
     // Fallback: show alert if modal function is missing
-    alert(`Warning: you are about to create a model that has ${totalParams.toLocaleString()} parameters, expect your browser to freeze for about ${estMinutes} minute(s).`);
+    alert(`Warning: you are about to create a model that has ${totalParams.toLocaleString()} parameters, expect your browser to freeze for about ${estMinutes} minute(s). (by the way, expect gibberish given the small training text)`);
     console.log('Fallback alert shown, proceeding to ALL TensorFlow.js code');
   }
 

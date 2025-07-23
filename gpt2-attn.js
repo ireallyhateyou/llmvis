@@ -20,7 +20,7 @@ function setSpinner(visible, msg = "Loading...") {
     spinner.id = "attn-spinner";
     spinner.style = "margin:1em;font-size:1.2em;";
     spinner.innerHTML = "<span style='display:inline-block;width:1em;height:1em;border:2px solid #1976d2;border-radius:50%;border-top:2px solid #fff;animation:spin 1s linear infinite;vertical-align:middle;'></span> <span id='attn-spinner-msg'>"+msg+"</span>";
-    // Use the correct container
+    // Use ²correct container
     const container = document.getElementById("gpt2-container");
     if (container) {
       container.appendChild(spinner);

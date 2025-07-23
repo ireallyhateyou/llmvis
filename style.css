@@ -283,6 +283,13 @@ button:active:not(:disabled) {
   margin: 1em 0;
 }
 
+.markov-row.single {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1.5em;
+}
+
 #markov-container .markov-row.single {
   justify-content: flex-start;
 }
@@ -362,7 +369,6 @@ button:active:not(:disabled) {
   transform: none;
 }
 
-/* SLM Controls - matching LSTM style */
 .slm-controls {
   display: flex;
   flex-direction: column;
@@ -864,29 +870,25 @@ li:hover { background: #eee; border-radius: 4px; transition: background 0.2s; }
 } 
 
 #graphCanvas {
-  max-width: 100%;
-  height: auto;
   display: block;
-  margin-top: 0.7em !important;
+  margin: 2em auto;
   background: #fff;
   border: 1px solid #eee;
   border-radius: 10px;
-  box-shadow: 0 2px 12px #1a0d05cc;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+  width: 700px;
+  height: 400px;
+  max-width: 98vw;
+  max-height: 60vw;
 }
-@media (max-width: 700px) {
+
+@media (max-width: 800px) {
   #graphCanvas {
-    width: 98vw !important;
-    height: 260px !important;
+    width: 98vw;
+    height: 220px;
     min-width: 0;
-    margin-left: auto;
-    margin-right: auto;
   }
 }
-@media (max-width: 480px) {
-  #graphCanvas {
-    height: 180px !important;
-  }
-} 
 
 .markov-row.single:last-of-type {
   margin-bottom: 0;
@@ -1907,6 +1909,23 @@ li.has-children:hover::before {
   margin: 1em 0;
 }
 
+.markov-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1em;
+  margin: 1em 0;
+}
+
+.markov-controls .control-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5em;
+}
+.markov-controls .control-group input {
+  flex: 1;
+}
+
 .control-group {
   display: flex;
   flex-direction: column;
@@ -2393,4 +2412,32 @@ li.has-children:hover::before {
   border: 1px solid #eee;
   border-radius: 8px;
   box-shadow: 0 2px 8px #1112;
+} 
+
+/* ELIZA info popup modal fix */
+#eliza-info-popup {
+  display: none;
+  position: fixed;
+  z-index: 10001;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.35);
+  align-items: center;
+  justify-content: center;
+  /* Flexbox centering */
+  flex-direction: row;
+  transition: opacity 0.2s;
+}
+#eliza-info-popup[style*="display: flex"] {
+  display: flex !important;
+  opacity: 1;
+}
+#eliza-info-popup > div {
+  animation: eliza-popup-fadein 0.2s;
+}
+@keyframes eliza-popup-fadein {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
 } 

@@ -82,7 +82,7 @@
   </div>
   <h1>LLMVis</h1>
   <div id="intro-section">
-    <p>Visualize language models.</p>
+    <p>Visualize natural language processing (NLP)!</p>
     <div id="model-picker-row">
       <label for="model-picker">Model:</label>
       <select id="model-picker">
@@ -90,7 +90,6 @@
         <option value="markov">Markov Chain</option>
         <option value="lstm">Long Short-Term Memory (LSTM)</option>
         <option value="slm">Small Language Model (SLM)</option>
-        <option value="rwkv">RWKV (RNN-Transformer Hybrid)</option>
         <option value="gpt2">GPT-2</option>
       </select>
     </div>
@@ -99,39 +98,34 @@
   <div id="markov-container" style="display: none;">
     <h2>Markov Chain</h2>
     <form id="markov-form" autocomplete="off" onsubmit="return false;">
-      <textarea id="inputText" rows="6" cols="60" placeholder="Paste your training text here...">Roses are red,
-Violets are blue,
-I love Hack Club
-and so should you!</textarea>
-      <div class="markov-row single">
-        <div class="markov-label-input">
+      <textarea id="inputText" rows="6" cols="60" placeholder="Paste your training text here..." style="flex-basis:100%;">Our ships are wrecked beneath the wave,
+But our hearts will find no grave.</textarea>
+      <div class="markov-controls">
+        <div class="control-group">
           <label for="order">Order:</label>
           <input type="number" id="order" min="1" max="5" value="2">
         </div>
-      </div>
-      <div class="markov-row single">
-        <div class="markov-label-input">
+        <div class="control-group">
           <label for="seed">Seed:</label>
           <input type="text" id="seed" placeholder="(optional)">
         </div>
-      </div>
-      <div class="markov-row single">
-        <div class="markov-label-input">
+        <div class="control-group">
           <label for="maxWords">Max Words:</label>
           <input type="number" id="maxWords" value="50">
         </div>
       </div>
-      <div id="output" style="margin:1em 0; min-height:2em;"></div>
-      <div class="markov-row" id="markov-btn-row">
-        <button id="trainBtn" type="button">Train Model</button>
-        <button id="generateBtn" type="button" disabled>Generate Text</button>
-      </div>
+      <button id="trainBtn" type="button">Train Model</button>
+      <button id="generateBtn" type="button" disabled>Generate Text</button>
+      <div id="output" style="margin:1em 0; min-height:2em; flex-basis:100%;"></div>
     </form>
-    <canvas id="graphCanvas" style="display:block; margin-top:2em; background:#fff; border:1px solid #eee;"></canvas>
+    <canvas id="graphCanvas" style="display: none; margin-top:2em; background:#fff; border:1px solid #eee;"></canvas>
   </div>
   
   <div id="eliza-container" style="display: block;">
     <h2>ELIZA</h2>
+    <div style="text-align:center;">
+      <a href="#" id="eliza-learn-link" style="font-size:0.95em; color:#111; text-decoration:none; cursor:pointer;">(learn about this model)</a>
+    </div>
     <div id="eliza-chat-area">
       <div id="eliza-chat-log"></div>
       <form id="eliza-input-area" autocomplete="off" onsubmit="return false;">
@@ -142,17 +136,19 @@ and so should you!</textarea>
     <div id="eliza-match-path"></div>
     <div id="eliza-tree" style="display:block;"></div>
   </div>
+
+  <!-- ELIZA Info Popup -->
+  <div id="eliza-info-popup" style="display:none; position:fixed; z-index:10001; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.35); align-items:center; justify-content:center;">
+    <div style="background:#fff; padding:2em 2.5em; border-radius:10px; box-shadow:0 2px 16px #0003; max-width:90vw; width:400px; text-align:left; position:relative;">
+      <span id="eliza-info-close" style="position:absolute; top:0.5em; right:1em; font-size:2em; color:#888; cursor:pointer;">&times;</span>
+      <div style="font-size:1.1em;">
+        <b>ELIZA</b> is one of the first natural language processing (NLP) programs, created in 1966 at MIT by Joseph Weizenbaum. The program pretends to be a Rogerian psychotherapist using basic pattern-matching for its responses. Despite ELIZA not knowing the meaning behind the user's input (rather responding with pre-programmed responses) end users tend to project human emotion like love and empathy onto the program, coining the <b>ELIZA effect</b> (which you can easily observe by how many people get AI girlfriends).
+      </div>
+    </div>
+  </div>
   
       <div id="lstm-container" style="display: none;">
     <h2>Long Short-Term Memory (LSTM)</h2>
-    <!-- Shakespeare Mode Toggle -->
-    <div class="shakespeare-mode">
-      <label>
-        <input type="checkbox" id="shakespeare-mode" onchange="toggleShakespeareMode()">
-        Shakespeare Mode (Enhanced Model)
-      </label>
-      <small>Uses larger model and Shakespeare corpus for better results</small>
-    </div>
     
     <label for="lstm-train-text">Training Text:</label>
     <textarea id="lstm-train-text" placeholder="Enter training text or use Shakespeare corpus...">To be, or not to be, that is the question:
@@ -176,7 +172,10 @@ And by opposing end them.</textarea>
       </div>
     </div>
     
-    <button onclick="trainLSTM()">Train Model</button>
+    <div class="lstm-controls" style="display:flex; align-items:center; gap:1em; margin-top:0.5em;">
+      <button onclick="trainLSTM()">Train Model</button>
+      <button id="shakespeare-corpus-btn" type="button">Use Shakespeare Corpus</button>
+    </div>
     <div id="lstm-status"></div>
     <div id="lstm-vis"></div>
   </div>
@@ -208,11 +207,10 @@ And by opposing end them.</textarea>
     <button onclick="trainSLM()">Train Model</button>
     <div id="slm-status"></div>
     <div id="slm-vis"></div>
-    <!-- No static canvases here; they will be created dynamically -->
   </div>
   
   <div id="gpt2-container" class="model-container" style="display: none; margin: 2em auto; padding: 2em; border: 2px solid #000000; border-radius: 8px; background: #ffffff; font-family: 'Times New Roman', serif; max-width: 800px; width: 90%; text-align: center;">
-    <h2 style="text-align:center;">GPT-2 Visualizer</h2>
+    <h2 style="text-align:center;">GPT-2 Attention</h2>
     <div id="model-load-row" style="margin-bottom:1em; display: flex; flex-direction: column; align-items: center;">
       <button id="attn-load-model-btn" style="padding:0.5em 1em;font-weight:bold;display:flex;flex-direction:column;align-items:center;">
         <span>Load Model</span>
@@ -221,7 +219,7 @@ And by opposing end them.</textarea>
       <span id="attn-model-progress" style="margin-left:1em;display:none;"></span>
     </div>
     <div style="margin-bottom:1em;">
-      <input id="attn-prompt" type="text" value="The girl ran to a local pub to escape the din of her city." style="width:60%">
+      <input id="attn-prompt" type="text" value="The girl's paper ship was wrecked in the storm." style="width:60%">
     </div>
     <div style="margin-bottom:1em;">
       <button id="attn-run-btn" disabled>Visualize Attention</button>
@@ -245,7 +243,6 @@ And by opposing end them.</textarea>
       <script src="elizabot.js"></script>
     <script src="eliza.js"></script>
     <script src="slm.js"></script>
-    <script src="rwkv.js"></script>
 
   <script>
     // Model picker logic
@@ -254,7 +251,6 @@ And by opposing end them.</textarea>
     const elizaContainer = document.getElementById('eliza-container');
     const lstmContainer = document.getElementById('lstm-container');
     const slmContainer = document.getElementById('slm-container');
-    const rwkvContainer = document.getElementById('rwkv-container');
     const gpt2Container = document.getElementById('gpt2-container');
     
     modelPicker.addEventListener('change', function() {
@@ -263,21 +259,18 @@ And by opposing end them.</textarea>
         elizaContainer.style.display = 'block';
         lstmContainer.style.display = 'none';
         slmContainer.style.display = 'none';
-        rwkvContainer.style.display = 'none';
         gpt2Container.style.display = 'none';
       } else if (this.value === 'markov') {
         markovContainer.style.display = 'block';
         elizaContainer.style.display = 'none';
         lstmContainer.style.display = 'none';
         slmContainer.style.display = 'none';
-        rwkvContainer.style.display = 'none';
         gpt2Container.style.display = 'none';
       } else if (this.value === 'lstm') {
         markovContainer.style.display = 'none';
         elizaContainer.style.display = 'none';
         lstmContainer.style.display = 'block';
         slmContainer.style.display = 'none';
-        rwkvContainer.style.display = 'none';
         gpt2Container.style.display = 'none';
       } else if (this.value === 'slm') {
         markovContainer.style.display = 'none';
@@ -288,25 +281,12 @@ And by opposing end them.</textarea>
         if (window.initSLMVisualization) {
           window.initSLMVisualization();
         }
-        rwkvContainer.style.display = 'none';
-        gpt2Container.style.display = 'none';
-      } else if (this.value === 'rwkv') {
-        markovContainer.style.display = 'none';
-        elizaContainer.style.display = 'none';
-        lstmContainer.style.display = 'none';
-        slmContainer.style.display = 'none';
-        rwkvContainer.style.display = 'block';
-        // Initialize RWKV visualization when selected
-        if (window.initRWKVVisualization) {
-          window.initRWKVVisualization();
-        }
         gpt2Container.style.display = 'none';
       } else if (this.value === 'gpt2') {
         markovContainer.style.display = 'none';
         elizaContainer.style.display = 'none';
         lstmContainer.style.display = 'none';
         slmContainer.style.display = 'none';
-        rwkvContainer.style.display = 'none';
         gpt2Container.style.display = 'block';
         // Initialize GPT-2 UI when selected
         if (window.initGPT2UI) {
@@ -321,8 +301,9 @@ And by opposing end them.</textarea>
     });
 
     // Shakespeare mode toggle
+    let shakespeareMode = false;
     async function toggleShakespeareMode() {
-      const shakespeareMode = document.getElementById('shakespeare-mode').checked;
+      shakespeareMode = !shakespeareMode;
       const trainText = document.getElementById('lstm-train-text');
       const seqLength = document.getElementById('lstm-seq-length');
       const epochs = document.getElementById('lstm-epochs');
@@ -672,6 +653,27 @@ And by opposing end them.</textarea>
     import { encode, decode } from "https://cdn.jsdelivr.net/npm/gpt-tokenizer@3.0.1/+esm";
     window.encode = encode;
     window.decode = decode;
+  </script>
+  <script>
+    // ELIZA info popup logic
+    document.addEventListener('DOMContentLoaded', function() {
+      var learnLink = document.getElementById('eliza-learn-link');
+      var popup = document.getElementById('eliza-info-popup');
+      var closeBtn = document.getElementById('eliza-info-close');
+      if (learnLink && popup && closeBtn) {
+        learnLink.onclick = function(e) {
+          e.preventDefault();
+          popup.style.display = 'flex';
+        };
+        closeBtn.onclick = function() {
+          popup.style.display = 'none';
+        };
+        // Optional: close popup when clicking outside the content
+        popup.onclick = function(e) {
+          if (e.target === popup) popup.style.display = 'none';
+        };
+      }
+    });
   </script>
 </body>
 </html> 

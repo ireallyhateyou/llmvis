@@ -27,7 +27,8 @@ window.addEventListener('DOMContentLoaded', function() {
       generateBtn.disabled = true;
       return;
     }
-    output.textContent = 'Model trained! You can now generate text.';
+    output.textContent = 'Training complete! You can now generate text.';
+    document.getElementById('graphCanvas').style.display = 'block';
     generateBtn.disabled = false;
     renderMarkovGraph(markov);
   };
@@ -404,24 +405,16 @@ function renderMarkovGraph(markov, highlightNgrams = new Set(), path = []) {
   console.log('renderMarkovGraph called');
   const canvas = document.getElementById('graphCanvas');
   if (!canvas) return;
+  // HiDPI/Retina support
+  const cssWidth = canvas.clientWidth;
+  const cssHeight = canvas.clientHeight;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = cssWidth * dpr;
+  canvas.height = cssHeight * dpr;
   const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // --- DEBUG: Test canvas rendering ---
-  if (window.DEBUG_MARKOV_CANVAS) {
-    ctx.beginPath();
-    ctx.arc(100, 100, 40, 0, 2 * Math.PI);
-    ctx.fillStyle = '#000000';
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(300, 200, 60, 0, 2 * Math.PI);
-    ctx.fillStyle = '#888888';
-    ctx.fill();
-    ctx.font = '32px sans-serif';
-    ctx.fillStyle = '#000000';
-    ctx.fillText('Canvas works!', 400, 100);
-    return;
-  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0); // reset
+  ctx.scale(dpr, dpr);
+  ctx.scale(0.8, 0.8);
 
   // --- Robust node/link construction ---
   // Collect all keys (states) and all nextWords (possible targets)
@@ -663,7 +656,8 @@ window.addEventListener('DOMContentLoaded', function() {
       generateBtn.disabled = true;
       return;
     }
-    output.textContent = 'Model trained! You can now generate text.';
+    output.textContent = 'Training complete! You can now generate text.';
+    document.getElementById('graphCanvas').style.display = 'block';
     generateBtn.disabled = false;
     renderMarkovGraph(markov);
   };
