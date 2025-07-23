@@ -650,9 +650,32 @@ And by opposing end them.</textarea>
     }
   </style>
   <script type="module">
-    import { encode, decode } from "https://cdn.jsdelivr.net/npm/gpt-tokenizer@3.0.1/+esm";
-    window.encode = encode;
-    window.decode = decode;
+    import { AutoTokenizer } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+    
+    console.log('Loading GPT-2 tokenizer...');
+    const tokenizer = await AutoTokenizer.from_pretrained('gpt2');
+    
+    window.encode = function(text) {
+        const encoded = tokenizer.encode(text);
+        return Array.from(encoded);
+    };
+    
+    window.decode = function(tokens) {
+        return tokenizer.decode(tokens, { skip_special_tokens: true });
+    };
+    
+    console.log('GPT-2 tokenizer loaded successfully');
+    
+    // Test the tokenizer
+    const testText = "Hello world";
+    const testTokens = window.encode(testText);
+    console.log('Tokenizer test - Input:', testText);
+    console.log('Tokenizer test - Tokens:', testTokens);
+    console.log('Tokenizer test - Max token ID:', Math.max(...testTokens));
+    console.log('Tokenizer test - Decoded:', window.decode(testTokens));
+    
+    // Enable the load model button after tokenizer is ready
+    document.getElementById("attn-load-model-btn").disabled = false;
   </script>
   <script>
     // ELIZA info popup logic

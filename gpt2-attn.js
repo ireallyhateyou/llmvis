@@ -115,15 +115,36 @@ async function run() {
   const prompt = document.getElementById("attn-prompt").value;
   const layerIdx = parseInt(document.getElementById("attn-layer").value);
   const headIdx = parseInt(document.getElementById("attn-head").value);
+  
   setStatus("Tokenizing...");
   let inputIds;
   try {
     inputIds = window.encode(prompt);
+    
+    // ADD DEBUGGING HERE
+    console.log('Input text:', prompt);
+    console.log('Token IDs:', inputIds);
+    console.log('Max token ID:', Math.max(...inputIds));
+    console.log('Min token ID:', Math.min(...inputIds));
+    
+    // ADD VALIDATION HERE
+    const maxValidTokenId = 50256; // GPT-2 vocab size
+    const invalidTokens = inputIds.filter(id => id > maxValidTokenId || id < 0);
+    console.log('Invalid tokens found:', invalidTokens);
+    if (invalidTokens.length > 0) {
+      setStatus(`Invalid token IDs found: [${invalidTokens.join(', ')}]. Max allowed: ${maxValidTokenId}`, true);
+      console.error('Stopping execution due to invalid token IDs');
+      btn.disabled = false;
+      return;
+    }
+    console.log('All token IDs are valid');
+    
   } catch (e) {
     setStatus("Tokenizer error: " + e.message, true);
     btn.disabled = false;
     return;
   }
+  
   const inputIdsBigInt = new BigInt64Array(inputIds.map(x => BigInt(x)));
   let tokens = [];
   try {
@@ -152,6 +173,8 @@ async function run() {
     btn.disabled = false;
     return;
   }
+  
+  // ... rest of the function remains the same
   let attn;
   if (results.attentions) {
     console.log('Found attentions in results.attentions');
