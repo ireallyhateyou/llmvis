@@ -188,14 +188,15 @@ async function run() {
     console.log('Found attentions in results["attentions"]');
     attn = results['attentions'][layerIdx][headIdx];
   } else {
-    // Check for individual attention head outputs
+    // Prefer softmaxed attention weights for visualization
+    const attnSoftmaxKey = `block_${layerIdx}_attn_head_${headIdx}_attn_softmax`;
     const attnKey = `block_${layerIdx}_attn_head_${headIdx}_attn`;
-    if (results[attnKey]) {
-      console.log(`Found attention in ${attnKey}`);
+    if (results[attnSoftmaxKey]) {
+      console.log(`Found attention in ${attnSoftmaxKey} (softmaxed, normalized)`);
+      attn = results[attnSoftmaxKey];
+    } else if (results[attnKey]) {
+      console.warn(`Softmaxed attention not found, using raw attention logits from ${attnKey}. This may not be accurate!`);
       attn = results[attnKey];
-      console.log('Attention tensor shape:', attn.dims);
-      console.log('Attention tensor data type:', attn.type);
-      console.log('Attention tensor size:', attn.data.length);
     } else {
       console.log('No attentions found. Available keys:', Object.keys(results));
       console.log('Results structure:', results);
@@ -205,10 +206,20 @@ async function run() {
       return;
     }
   }
+  // Debug: Print min, max, and a sample of attention values
+  if (attn && attn.data && attn.data.length) {
+    const min = Math.min(...attn.data);
+    const max = Math.max(...attn.data);
+    const sample = attn.data.slice(0, 10);
+    console.log('Attention values: min =', min, ', max =', max, ', sample =', sample);
+  } else {
+    console.log('Attention tensor is missing data or empty:', attn);
+  }
   setSpinner(false);
   drawHeatmap(attn, tokens);
   drawGraph(attn, tokens);
   btn.disabled = false;
+  setStatus("Model run complete.");
 }
 
 function drawHeatmap(attn, tokens) {
@@ -242,10 +253,12 @@ function drawHeatmap(attn, tokens) {
   svg.attr("width", width).attr("height", height);
   
   // Create color scale with better colors
+  // Use perceptually uniform colormap and fixed domain for better contrast
   const colorScale = d3.scaleSequential()
-    .domain([0, d3.max(attnMatrix.flat())])
-    .interpolator(d3.interpolateBlues);
-  
+    .domain([0, 0.2]) // show more detail in the low range
+    .interpolator(d3.interpolateViridis)
+    .clamp(true);
+
   const cellSize = size / tokens.length;
   
   // Add title
@@ -311,43 +324,44 @@ function drawHeatmap(attn, tokens) {
   const legendHeight = 20;
   const legendX = width - margin.right - legendWidth;
   const legendY = height - 40;
-  
+
+  // Update legend scale and axis to match new color scale domain
   const legendScale = d3.scaleLinear()
-    .domain([0, d3.max(attnMatrix.flat())])
+    .domain([0, 0.2])
     .range([0, legendWidth]);
-  
+
   const legendAxis = d3.axisBottom(legendScale)
     .ticks(5)
     .tickFormat(d => (d * 100).toFixed(0) + "%");
-  
+
   const legendGroup = svg.append("g")
     .attr("transform", `translate(${legendX}, ${legendY})`);
-  
+
   // Draw legend gradient
   const defs = svg.append("defs");
   const gradient = defs.append("linearGradient")
     .attr("id", "heatmap-gradient")
     .attr("x1", "0%").attr("y1", "0%")
     .attr("x2", "100%").attr("y2", "0%");
-  
+
   gradient.append("stop")
     .attr("offset", "0%")
-    .attr("stop-color", colorScale.domain()[0]);
-  
+    .attr("stop-color", colorScale(0));
+
   gradient.append("stop")
     .attr("offset", "100%")
-    .attr("stop-color", colorScale.domain()[1]);
-  
+    .attr("stop-color", colorScale(0.2));
+
   legendGroup.append("rect")
     .attr("width", legendWidth)
     .attr("height", legendHeight)
     .attr("fill", "url(#heatmap-gradient)");
-  
+
   legendGroup.append("g")
     .attr("transform", `translate(0, ${legendHeight})`)
     .call(legendAxis);
-  
-  // Add legend title
+
+  // Add legend title (label)
   svg.append("text")
     .attr("x", legendX + legendWidth / 2)
     .attr("y", legendY - 5)
