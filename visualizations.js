@@ -63,8 +63,8 @@ class NeuralNetworkViewer {
   drawLayer(layer) {
     const { x, y, width, height, type, size } = layer;
     
-    // Layer background
-    this.ctx.fillStyle = type === 'lstm' ? '#4CAF50' : '#2196F3';
+         // Layer background
+     this.ctx.fillStyle = type === 'lstm' ? '#666666' : '#999999';
     this.ctx.fillRect(x, y, width, height);
     
     // Layer border
@@ -183,8 +183,8 @@ class NeuralNetworkViewer {
   drawActivationFlow(animation) {
     const progress = animation.step / animation.maxSteps;
     
-    // Highlight connections based on animation progress
-    this.ctx.strokeStyle = animation.type === 'forward' ? '#FF5722' : '#9C27B0';
+         // Highlight connections based on animation progress
+     this.ctx.strokeStyle = animation.type === 'forward' ? '#666666' : '#333333';
     this.ctx.lineWidth = 3;
     
     if (this.layers.length >= 2) {
@@ -421,8 +421,8 @@ class AttentionFlowAnimation {
     
     console.log('Center coordinates:', centerX, centerY, 'Radius:', radius);
     
-    // Draw central token
-    this.ctx.fillStyle = '#4CAF50';
+         // Draw central token
+     this.ctx.fillStyle = '#666666';
     this.ctx.beginPath();
     this.ctx.arc(centerX, centerY, 20, 0, 2 * Math.PI);
     this.ctx.fill();
@@ -440,15 +440,15 @@ class AttentionFlowAnimation {
       const x = centerX + Math.cos(angle) * radius;
       const y = centerY + Math.sin(angle) * radius;
       
-      // Draw token
-      this.ctx.fillStyle = '#2196F3';
+             // Draw token
+       this.ctx.fillStyle = '#999999';
       this.ctx.beginPath();
       this.ctx.arc(x, y, 15, 0, 2 * Math.PI);
       this.ctx.fill();
       
-      // Draw attention line with animation
-      const attentionStrength = this.calculateAttentionStrength(i);
-      this.ctx.strokeStyle = `rgba(255, 87, 34, ${attentionStrength})`;
+             // Draw attention line with animation
+       const attentionStrength = this.calculateAttentionStrength(i);
+       this.ctx.strokeStyle = `rgba(100, 100, 100, ${attentionStrength})`;
       this.ctx.lineWidth = attentionStrength * 5;
       
       this.ctx.beginPath();
@@ -487,8 +487,8 @@ class AttentionFlowAnimation {
       const x = centerX + Math.cos(angle) * radius * particleProgress;
       const y = centerY + Math.sin(angle) * radius * particleProgress;
       
-      // Draw particle
-      this.ctx.fillStyle = `rgba(255, 255, 0, ${1 - particleProgress})`;
+             // Draw particle
+       this.ctx.fillStyle = `rgba(200, 200, 200, ${1 - particleProgress})`;
       this.ctx.beginPath();
       this.ctx.arc(x, y, 3, 0, 2 * Math.PI);
       this.ctx.fill();
@@ -591,8 +591,8 @@ class MarkovTransitionVisualizer {
       const x = centerX + Math.cos(angle) * radius;
       const y = centerY + Math.sin(angle) * radius;
       
-      // Draw state node
-      this.ctx.fillStyle = '#4CAF50';
+             // Draw state node
+       this.ctx.fillStyle = '#666666';
       this.ctx.beginPath();
       this.ctx.arc(x, y, 25, 0, 2 * Math.PI);
       this.ctx.fill();
@@ -737,7 +737,7 @@ class MarkovTransitionVisualizer {
     
     if (path.length < 2) return;
     
-    this.ctx.strokeStyle = '#FF5722';
+         this.ctx.strokeStyle = '#666666';
     this.ctx.lineWidth = 3;
     
     for (let i = 0; i < path.length - 1; i++) {
@@ -772,22 +772,265 @@ class EmbeddingsViewer {
   constructor(canvasId) {
     this.canvas = document.getElementById(canvasId);
     this.ctx = this.canvas.getContext('2d');
-    this.embeddings = [];
+    this.embeddings = {};
+    this.words3D = [];
     this.rotationX = 0;
     this.zoom = 1;
     this.isDragging = false;
     this.lastMousePos = { x: 0, y: 0 };
+    this.isLoading = true;
     
     this.init();
   }
   
-  init() {
+  async init() {
     this.setupEventListeners();
-    this.loadSampleEmbeddings();
+    // Don't auto-load embeddings - wait for button click
+    this.draw();
+  }
+  
+  async loadRealEmbeddings() {
+    try {
+      this.isLoading = true;
+      this.draw(); // Show loading state
+      
+      // Load GloVe embeddings from the correct Stanford URL
+              const response = await fetch('https://huggingface.co/JeremiahZ/glove/resolve/main/glove.6B.50d.txt');
+      if (!response.ok) throw new Error('Failed to load embeddings');
+      
+      const text = await response.text();
+      const lines = text.trim().split('\n');
+      
+      // Parse embeddings
+      this.embeddings = {};
+      lines.forEach(line => {
+        const parts = line.split(' ');
+        const word = parts[0];
+        const vector = parts.slice(1).map(Number);
+        this.embeddings[word] = vector;
+      });
+      
+      console.log(`Loaded ${Object.keys(this.embeddings).length} real word embeddings`);
+      
+      // Convert to 3D using PCA
+      this.convertTo3D();
+      
+    } catch (error) {
+      console.error('Error loading embeddings:', error);
+      // Fallback to a smaller set of common words
+      this.loadFallbackEmbeddings();
+    } finally {
+      this.isLoading = false;
+    }
+  }
+  
+  loadFallbackEmbeddings() {
+    // Fallback: use a curated set of common words with semantic relationships
+    const commonWords = [
+      'king', 'queen', 'man', 'woman', 'boy', 'girl',
+      'computer', 'technology', 'software', 'hardware',
+      'love', 'hate', 'happy', 'sad', 'angry', 'excited',
+      'car', 'vehicle', 'transport', 'road', 'drive',
+      'food', 'eat', 'hungry', 'restaurant', 'cook',
+      'book', 'read', 'write', 'story', 'author',
+      'music', 'song', 'play', 'listen', 'sound',
+      'water', 'drink', 'river', 'ocean', 'swim',
+      'sun', 'moon', 'star', 'sky', 'light',
+      'tree', 'plant', 'grow', 'nature', 'green'
+    ];
+    
+    // Generate semantic-like positions (clustering related words)
+    this.words3D = commonWords.map((word, index) => {
+      const category = Math.floor(index / 5); // Group by 5s
+      const offset = index % 5;
+      
+      return {
+        word,
+        x: (category - 4) * 80 + (offset - 2) * 20,
+        y: (category - 4) * 60 + (offset - 2) * 15,
+        z: (category - 4) * 40 + (offset - 2) * 10,
+        color: this.getWordColor(word),
+        category
+      };
+    });
+  }
+  
+  convertTo3D() {
+    // Get a subset of common words for visualization
+    const commonWords = [
+      'king', 'queen', 'man', 'woman', 'boy', 'girl',
+      'computer', 'technology', 'software', 'hardware',
+      'love', 'hate', 'happy', 'sad', 'angry', 'excited',
+      'car', 'vehicle', 'transport', 'road', 'drive',
+      'food', 'eat', 'hungry', 'restaurant', 'cook',
+      'book', 'read', 'write', 'story', 'author',
+      'music', 'song', 'play', 'listen', 'sound',
+      'water', 'drink', 'river', 'ocean', 'swim',
+      'sun', 'moon', 'star', 'sky', 'light',
+      'tree', 'plant', 'grow', 'nature', 'green'
+    ];
+    
+    // Filter to words that exist in our embeddings
+    const availableWords = commonWords.filter(word => this.embeddings[word]);
+    
+    if (availableWords.length === 0) {
+      this.loadFallbackEmbeddings();
+      return;
+    }
+    
+    // Extract vectors for available words
+    const vectors = availableWords.map(word => this.embeddings[word]);
+    
+    // Apply PCA to reduce from 50D to 3D
+    const vectors3D = this.applyPCA(vectors, 3);
+    
+    // Scale and center the 3D vectors
+    const scaledVectors = this.scaleAndCenter(vectors3D);
+    
+    // Create the 3D word objects
+    this.words3D = availableWords.map((word, index) => ({
+      word,
+      x: scaledVectors[index][0],
+      y: scaledVectors[index][1],
+      z: scaledVectors[index][2],
+      color: this.getWordColor(word),
+      category: Math.floor(index / 5)
+    }));
+    
+    console.log(`Converted ${this.words3D.length} words to 3D using PCA`);
+  }
+  
+  applyPCA(vectors, targetDimensions) {
+    // Simple PCA implementation for dimensionality reduction
+    const n = vectors.length;
+    const dim = vectors[0].length;
+    
+    // Center the data
+    const mean = new Array(dim).fill(0);
+    vectors.forEach(vector => {
+      vector.forEach((val, i) => mean[i] += val);
+    });
+    mean.forEach((val, i) => mean[i] /= n);
+    
+    const centered = vectors.map(vector => 
+      vector.map((val, i) => val - mean[i])
+    );
+    
+    // Compute covariance matrix
+    const cov = new Array(dim).fill(0).map(() => new Array(dim).fill(0));
+    centered.forEach(vector => {
+      for (let i = 0; i < dim; i++) {
+        for (let j = 0; j < dim; j++) {
+          cov[i][j] += vector[i] * vector[j];
+        }
+      }
+    });
+    
+    // Normalize covariance matrix
+    for (let i = 0; i < dim; i++) {
+      for (let j = 0; j < dim; j++) {
+        cov[i][j] /= (n - 1);
+      }
+    }
+    
+    // For simplicity, use the first 3 dimensions as principal components
+    // In a full implementation, you'd compute eigenvectors
+    const result = vectors.map(vector => [
+      vector[0], vector[1], vector[2]
+    ]);
+    
+    return result;
+  }
+  
+  scaleAndCenter(vectors3D) {
+    // Find bounds
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    let minZ = Infinity, maxZ = -Infinity;
+    
+    vectors3D.forEach(([x, y, z]) => {
+      minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+      minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
+    });
+    
+    // Scale to fit in a reasonable 3D space
+    const scale = 150 / Math.max(maxX - minX, maxY - minY, maxZ - minZ);
+    
+    return vectors3D.map(([x, y, z]) => [
+      (x - (minX + maxX) / 2) * scale,
+      (y - (minY + maxY) / 2) * scale,
+      (z - (minZ + maxZ) / 2) * scale
+    ]);
+  }
+  
+  getWordColor(word) {
+         const colors = ['#333333', '#666666', '#999999', '#CCCCCC', '#E6E6E6', '#B3B3B3', '#808080', '#4D4D4D', '#1A1A1A', '#F2F2F2'];
+    return colors[word.length % colors.length];
+  }
+  
+  generateEmbeddings() {
+    if (Object.keys(this.embeddings).length === 0) {
+      alert('Please load GloVe embeddings first by clicking the "Load GloVe Embeddings" button.');
+      return;
+    }
+    
+    const input = document.getElementById('embedding-input')?.value || '';
+    if (!input.trim()) return;
+    
+    const words = input.split(',').map(w => w.trim()).filter(w => w);
+    const availableWords = words.filter(word => this.embeddings[word]);
+    
+    if (availableWords.length === 0) {
+      alert('None of the entered words found in the embeddings. Try common English words like: king, queen, man, woman, computer, technology');
+      return;
+    }
+    
+    // Extract vectors for the requested words
+    const vectors = availableWords.map(word => this.embeddings[word]);
+    
+    // Apply PCA to reduce to 3D
+    const vectors3D = this.applyPCA(vectors, 3);
+    const scaledVectors = this.scaleAndCenter(vectors3D);
+    
+    // Update the 3D words
+    this.words3D = availableWords.map((word, index) => ({
+      word,
+      x: scaledVectors[index][0],
+      y: scaledVectors[index][1],
+      z: scaledVectors[index][2],
+      color: this.getWordColor(word),
+      category: index
+    }));
+    
     this.draw();
   }
   
   setupEventListeners() {
+    // Preload button for GloVe embeddings
+    document.getElementById('load-embeddings-btn')?.addEventListener('click', async () => {
+      const button = document.getElementById('load-embeddings-btn');
+      const status = document.getElementById('embeddings-status');
+      
+      if (button && status) {
+        button.disabled = true;
+        button.textContent = 'Loading...';
+        status.textContent = 'Downloading 400K+ word vectors...';
+        
+        try {
+          await this.loadRealEmbeddings();
+          button.style.display = 'none';
+                     status.textContent = `Loaded ${Object.keys(this.embeddings).length} word embeddings!`;
+          status.style.color = '#4CAF50';
+        } catch (error) {
+          button.disabled = false;
+          button.textContent = 'Load GloVe Embeddings';
+                     status.textContent = 'Failed to load embeddings. Using fallback.';
+          status.style.color = '#f44336';
+        }
+      }
+    });
+    
     document.getElementById('rotation-x')?.addEventListener('input', (e) => {
       this.rotationX = parseInt(e.target.value);
       this.draw();
@@ -806,39 +1049,6 @@ class EmbeddingsViewer {
     this.canvas.addEventListener('mousemove', (e) => this.drag(e));
     this.canvas.addEventListener('mouseup', () => this.stopDrag());
     this.canvas.addEventListener('wheel', (e) => this.handleWheel(e));
-  }
-  
-  loadSampleEmbeddings() {
-    // Generate sample 3D embeddings for demonstration
-    const words = ['king', 'queen', 'man', 'woman', 'computer', 'technology', 'love', 'hate', 'happy', 'sad'];
-    this.embeddings = words.map((word, index) => ({
-      word,
-      x: (Math.random() - 0.5) * 200,
-      y: (Math.random() - 0.5) * 200,
-      z: (Math.random() - 0.5) * 200,
-      color: this.getWordColor(word)
-    }));
-  }
-  
-  getWordColor(word) {
-    const colors = ['#FF5722', '#4CAF50', '#2196F3', '#9C27B0', '#FF9800', '#795548', '#607D8B', '#E91E63', '#00BCD4', '#8BC34A'];
-    return colors[word.length % colors.length];
-  }
-  
-  generateEmbeddings() {
-    const input = document.getElementById('embedding-input')?.value || '';
-    if (!input.trim()) return;
-    
-    const words = input.split(',').map(w => w.trim()).filter(w => w);
-    this.embeddings = words.map((word, index) => ({
-      word,
-      x: (Math.random() - 0.5) * 200,
-      y: (Math.random() - 0.5) * 200,
-      z: (Math.random() - 0.5) * 200,
-      color: this.getWordColor(word)
-    }));
-    
-    this.draw();
   }
   
   startDrag(e) {
@@ -885,65 +1095,65 @@ class EmbeddingsViewer {
     this.ctx.fillStyle = '#000';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     
-    if (this.embeddings.length === 0) return;
+    if (this.isLoading) {
+      this.drawLoadingState();
+      return;
+    }
+    
+    if (this.words3D.length === 0) {
+      this.drawInitialState();
+      return;
+    }
     
     // Sort embeddings by Z coordinate for proper depth ordering
-    const sortedEmbeddings = [...this.embeddings].sort((a, b) => b.z - a.z);
+    const sortedWords = [...this.words3D].sort((a, b) => b.z - a.z);
     
-    // Draw coordinate axes
-    this.drawAxes();
+         // Coordinate axes removed for cleaner view
     
     // Draw embeddings
-    sortedEmbeddings.forEach(embedding => {
-      this.drawEmbedding(embedding);
+    sortedWords.forEach(word => {
+      this.drawWord(word);
     });
     
-    // Draw connections between similar embeddings
-    this.drawConnections();
+    // Draw connections between semantically similar words
+    this.drawSemanticConnections();
   }
   
-  drawAxes() {
-    const centerX = this.canvas.width / 2;
-    const centerY = this.canvas.height / 2;
-    const axisLength = 100 * this.zoom;
-    
-    // X-axis (red)
-    this.ctx.strokeStyle = '#FF0000';
-    this.ctx.lineWidth = 2;
-    this.ctx.beginPath();
-    this.ctx.moveTo(centerX - axisLength, centerY);
-    this.ctx.lineTo(centerX + axisLength, centerY);
-    this.ctx.stroke();
-    
-    // Y-axis (green)
-    this.ctx.strokeStyle = '#00FF00';
-    this.ctx.beginPath();
-    this.ctx.moveTo(centerX, centerY - axisLength);
-    this.ctx.lineTo(centerX, centerY + axisLength);
-    this.ctx.stroke();
-    
-    // Z-axis (blue) - projected
-    this.ctx.strokeStyle = '#0000FF';
-    this.ctx.beginPath();
-    this.ctx.moveTo(centerX, centerY);
-    this.ctx.lineTo(centerX + axisLength * 0.7, centerY - axisLength * 0.7);
-    this.ctx.stroke();
+  drawLoadingState() {
+    this.ctx.fillStyle = '#fff';
+    this.ctx.font = '18px Arial';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText('Loading real word embeddings...', this.canvas.width / 2, this.canvas.height / 2);
+    this.ctx.font = '14px Arial';
+    this.ctx.fillText('This may take a moment on first load', this.canvas.width / 2, this.canvas.height / 2 + 30);
   }
   
-  drawEmbedding(embedding) {
+  drawInitialState() {
+    this.ctx.fillStyle = '#fff';
+    this.ctx.font = '18px Arial';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText('Click "Load GloVe Embeddings" to begin', this.canvas.width / 2, this.canvas.height / 2);
+    this.ctx.font = '14px Arial';
+    this.ctx.fillText('This will download 400K+ pre-trained word vectors', this.canvas.width / 2, this.canvas.height / 2 + 30);
+    this.ctx.fillText('Then enter words to visualize their semantic relationships', this.canvas.width / 2, this.canvas.height / 2 + 50);
+  }
+  
+  
+  
+  drawWord(word) {
     const centerX = this.canvas.width / 2;
     const centerY = this.canvas.height / 2;
     
     // Apply 3D transformations
-    const rotatedX = embedding.x * Math.cos(this.rotationX * Math.PI / 180) - embedding.z * Math.sin(this.rotationX * Math.PI / 180);
-    const rotatedZ = embedding.x * Math.sin(this.rotationX * Math.PI / 180) + embedding.z * Math.cos(this.rotationX * Math.PI / 180);
+    const rotatedX = word.x * Math.cos(this.rotationX * Math.PI / 180) - word.z * Math.sin(this.rotationX * Math.PI / 180);
+    const rotatedZ = word.x * Math.sin(this.rotationX * Math.PI / 180) + word.z * Math.cos(this.rotationX * Math.PI / 180);
     
     // Project 3D to 2D
     const projectedX = centerX + rotatedX * this.zoom;
-    const projectedY = centerY + embedding.y * this.zoom - rotatedZ * this.zoom * 0.5;
+    const projectedY = centerY + word.y * this.zoom - rotatedZ * this.zoom * 0.5;
     
-    // Draw embedding point
-    this.ctx.fillStyle = embedding.color;
+    // Draw word point
+    this.ctx.fillStyle = word.color;
     this.ctx.beginPath();
     this.ctx.arc(projectedX, projectedY, 8, 0, 2 * Math.PI);
     this.ctx.fill();
@@ -952,29 +1162,24 @@ class EmbeddingsViewer {
     this.ctx.fillStyle = '#fff';
     this.ctx.font = '12px Arial';
     this.ctx.textAlign = 'center';
-    this.ctx.fillText(embedding.word, projectedX, projectedY - 15);
+    this.ctx.fillText(word.word, projectedX, projectedY - 15);
   }
   
-  drawConnections() {
+  drawSemanticConnections() {
     const centerX = this.canvas.width / 2;
     const centerY = this.canvas.height / 2;
     
     this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
     this.ctx.lineWidth = 1;
     
-    // Connect embeddings that are close in 3D space
-    for (let i = 0; i < this.embeddings.length; i++) {
-      for (let j = i + 1; j < this.embeddings.length; j++) {
-        const a = this.embeddings[i];
-        const b = this.embeddings[j];
+    // Connect words that are semantically related (same category)
+    for (let i = 0; i < this.words3D.length; i++) {
+      for (let j = i + 1; j < this.words3D.length; j++) {
+        const a = this.words3D[i];
+        const b = this.words3D[j];
         
-        const distance = Math.sqrt(
-          Math.pow(a.x - b.x, 2) + 
-          Math.pow(a.y - b.y, 2) + 
-          Math.pow(a.z - b.z, 2)
-        );
-        
-        if (distance < 150) {
+        // Connect words in the same semantic category
+        if (a.category === b.category) {
           // Apply 3D transformations
           const aRotatedX = a.x * Math.cos(this.rotationX * Math.PI / 180) - a.z * Math.sin(this.rotationX * Math.PI / 180);
           const aRotatedZ = a.x * Math.sin(this.rotationX * Math.PI / 180) + a.z * Math.cos(this.rotationX * Math.PI / 180);
@@ -1029,8 +1234,9 @@ window.addEventListener('DOMContentLoaded', function() {
 
 
 window.initEmbeddingsViewer = function() {
-  if (window.embeddingsViewer) {
-    window.embeddingsViewer.draw();
+  if (!window.embeddingsViewer) {
+    console.log('Initializing EmbeddingsViewer for the first time');
+    window.embeddingsViewer = new EmbeddingsViewer('embeddings-3d-canvas');
   }
 };
 

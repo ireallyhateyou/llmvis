@@ -2601,6 +2601,44 @@ li.has-children:hover::before {
   text-align: center;
 }
 
+#load-embeddings-btn {
+  transition: all 0.3s ease;
+}
+
+#load-embeddings-btn:hover {
+  background: #666666 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+#load-embeddings-btn:disabled {
+  background: #ccc !important;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+#embeddings-status {
+  transition: color 0.3s ease;
+}
+
+/* Grayscale color overrides for buttons */
+button[style*="background: #2196F3"] {
+  background: #999999 !important;
+}
+
+button[style*="background: #4CAF50"] {
+  background: #666666 !important;
+}
+
+button[style*="background: #FF5722"] {
+  background: #666666 !important;
+}
+
+button[style*="background: #9C27B0"] {
+  background: #666666 !important;
+}
+
 #embeddings-3d-container {
   width: 100%;
   height: 500px;

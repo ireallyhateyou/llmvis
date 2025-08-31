@@ -90,7 +90,7 @@
         <option value="markov">Markov Chain</option>
         <option value="lstm">Long Short-Term Memory (LSTM)</option>
         <option value="gpt2">GPT-2</option>
-        <option value="embeddings">Word Embeddings</option>
+        <option value="embeddings">GloVe Word Embeddings</option>
       </select>
     </div>
   </div>
@@ -303,10 +303,14 @@ And by opposing end them.</textarea>
 
   <!-- 3D Word Embeddings Viewer -->
   <div id="embeddings-viewer" class="model-container" style="display: none; margin: 2em auto; padding: 2em; border: 2px solid #000000; border-radius: 8px; background: #ffffff; max-width: 1000px; width: 95%;">
-    <h2 style="text-align:center;">3D Word Embeddings Explorer</h2>
+    <h2 style="text-align:center;">3D Word Embeddings (GloVe Vectors)</h2>
+    <div style="margin-bottom: 1em;">
+                        <button id="load-embeddings-btn" style="padding: 0.5em 1em; background: #999999; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 1em;">Load GloVe Embeddings</button>
+      <span id="embeddings-status" style="color: #666; font-style: italic;">Click to load 400K+ pre-trained word vectors</span>
+    </div>
     <div style="margin-bottom: 1em;">
       <input type="text" id="embedding-input" placeholder="Enter words separated by commas..." style="width: 60%; padding: 0.5em;" value="king, queen, man, woman, computer, technology, love, hate, happy, sad">
-      <button id="visualize-embeddings" style="margin-left: 1em; padding: 0.5em 1em;">Visualize</button>
+                          <button id="visualize-embeddings" style="margin-left: 1em; padding: 0.5em 1em; background: #666666; color: white; border: none; border-radius: 4px; cursor: pointer;">Visualize</button>
     </div>
     <div id="embeddings-3d-container" style="width: 100%; height: 500px; border: 1px solid #ccc; background: #000; position: relative;">
       <canvas id="embeddings-3d-canvas" width="800" height="500"></canvas>
