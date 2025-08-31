@@ -778,7 +778,7 @@ class EmbeddingsViewer {
     this.zoom = 1;
     this.isDragging = false;
     this.lastMousePos = { x: 0, y: 0 };
-    this.isLoading = true;
+    this.isLoading = false; // Start with not loading
     
     this.init();
   }
@@ -786,7 +786,7 @@ class EmbeddingsViewer {
   async init() {
     this.setupEventListeners();
     // Don't auto-load embeddings - wait for button click
-    this.draw();
+    // Don't draw initially - canvas should be blank until visualize is clicked
   }
   
   async loadRealEmbeddings() {
@@ -795,7 +795,7 @@ class EmbeddingsViewer {
       this.draw(); // Show loading state
       
       // Load GloVe embeddings from the correct Stanford URL
-              const response = await fetch('https://huggingface.co/JeremiahZ/glove/resolve/main/glove.6B.50d.txt');
+      const response = await fetch('https://huggingface.co/JeremiahZ/glove/resolve/main/glove.6B.50d.txt');
       if (!response.ok) throw new Error('Failed to load embeddings');
       
       const text = await response.text();
@@ -812,8 +812,7 @@ class EmbeddingsViewer {
       
       console.log(`Loaded ${Object.keys(this.embeddings).length} real word embeddings`);
       
-      // Convert to 3D using PCA
-      this.convertTo3D();
+      // Don't convert to 3D yet - wait for user to click "Visualize"
       
     } catch (error) {
       console.error('Error loading embeddings:', error);
@@ -821,12 +820,15 @@ class EmbeddingsViewer {
       this.loadFallbackEmbeddings();
     } finally {
       this.isLoading = false;
+      // After loading, show blank canvas until user clicks "Visualize"
+      this.draw();
     }
   }
   
   loadFallbackEmbeddings() {
     // Fallback: use a curated set of common words with semantic relationships
-    const commonWords = [
+    // But don't populate words3D yet - wait for user to click "Visualize"
+    this.fallbackWords = [
       'king', 'queen', 'man', 'woman', 'boy', 'girl',
       'computer', 'technology', 'software', 'hardware',
       'love', 'hate', 'happy', 'sad', 'angry', 'excited',
@@ -840,7 +842,8 @@ class EmbeddingsViewer {
     ];
     
     // Generate semantic-like positions (clustering related words)
-    this.words3D = commonWords.map((word, index) => {
+    // Store in fallbackWords3D instead of words3D
+    this.fallbackWords3D = this.fallbackWords.map((word, index) => {
       const category = Math.floor(index / 5); // Group by 5s
       const offset = index % 5;
       
@@ -970,7 +973,8 @@ class EmbeddingsViewer {
   }
   
   generateEmbeddings() {
-    if (Object.keys(this.embeddings).length === 0) {
+    // Check if we have either real embeddings or fallback words
+    if (Object.keys(this.embeddings).length === 0 && !this.fallbackWords3D) {
       alert('Please load GloVe embeddings first by clicking the "Load GloVe Embeddings" button.');
       return;
     }
@@ -978,31 +982,51 @@ class EmbeddingsViewer {
     const input = document.getElementById('embedding-input')?.value || '';
     if (!input.trim()) return;
     
-    const words = input.split(',').map(w => w.trim()).filter(w => w);
-    const availableWords = words.filter(word => this.embeddings[word]);
+    let words3D = [];
     
-    if (availableWords.length === 0) {
-      alert('None of the entered words found in the embeddings. Try common English words like: king, queen, man, woman, computer, technology');
-      return;
+    if (Object.keys(this.embeddings).length > 0) {
+      // Use real embeddings
+      const words = input.split(',').map(w => w.trim()).filter(w => w);
+      const availableWords = words.filter(word => this.embeddings[word]);
+      
+      if (availableWords.length === 0) {
+        alert('None of the entered words found in the embeddings. Try common English words like: king, queen, man, woman, computer, technology');
+        return;
+      }
+      
+      // Extract vectors for the requested words
+      const vectors = availableWords.map(word => this.embeddings[word]);
+      
+      // Apply PCA to reduce to 3D
+      const vectors3D = this.applyPCA(vectors, 3);
+      const scaledVectors = this.scaleAndCenter(vectors3D);
+      
+      // Create the 3D words
+      words3D = availableWords.map((word, index) => ({
+        word,
+        x: scaledVectors[index][0],
+        y: scaledVectors[index][1],
+        z: scaledVectors[index][2],
+        color: this.getWordColor(word),
+        category: index
+      }));
+    } else if (this.fallbackWords3D) {
+      // Use fallback words
+      const words = input.split(',').map(w => w.trim()).filter(w => w);
+      const availableWords = this.fallbackWords3D.filter(wordObj => 
+        words.includes(wordObj.word)
+      );
+      
+      if (availableWords.length === 0) {
+        alert('None of the entered words found in fallback. Try common English words like: king, queen, man, woman, computer, technology');
+        return;
+      }
+      
+      words3D = availableWords;
     }
     
-    // Extract vectors for the requested words
-    const vectors = availableWords.map(word => this.embeddings[word]);
-    
-    // Apply PCA to reduce to 3D
-    const vectors3D = this.applyPCA(vectors, 3);
-    const scaledVectors = this.scaleAndCenter(vectors3D);
-    
-    // Update the 3D words
-    this.words3D = availableWords.map((word, index) => ({
-      word,
-      x: scaledVectors[index][0],
-      y: scaledVectors[index][1],
-      z: scaledVectors[index][2],
-      color: this.getWordColor(word),
-      category: index
-    }));
-    
+    // Update the 3D words and draw
+    this.words3D = words3D;
     this.draw();
   }
   
@@ -1033,12 +1057,18 @@ class EmbeddingsViewer {
     
     document.getElementById('rotation-x')?.addEventListener('input', (e) => {
       this.rotationX = parseInt(e.target.value);
-      this.draw();
+      // Only redraw if there are words to show
+      if (this.words3D && this.words3D.length > 0) {
+        this.draw();
+      }
     });
     
     document.getElementById('zoom-level')?.addEventListener('input', (e) => {
       this.zoom = parseFloat(e.target.value);
-      this.draw();
+      // Only redraw if there are words to show
+      if (this.words3D && this.words3D.length > 0) {
+        this.draw();
+      }
     });
     
     document.getElementById('reset-view')?.addEventListener('click', () => this.resetView());
@@ -1066,7 +1096,10 @@ class EmbeddingsViewer {
     this.rotationX = this.rotationX % 360;
     
     this.lastMousePos = { x: e.clientX, y: e.clientY };
-    this.draw();
+    // Only redraw if there are words to show
+    if (this.words3D && this.words3D.length > 0) {
+      this.draw();
+    }
   }
   
   stopDrag() {
@@ -1077,7 +1110,10 @@ class EmbeddingsViewer {
     e.preventDefault();
     this.zoom += e.deltaY * 0.001;
     this.zoom = Math.max(0.1, Math.min(3, this.zoom));
-    this.draw();
+    // Only redraw if there are words to show
+    if (this.words3D && this.words3D.length > 0) {
+      this.draw();
+    }
   }
   
   resetView() {
@@ -1085,7 +1121,10 @@ class EmbeddingsViewer {
     this.zoom = 1;
     document.getElementById('rotation-x').value = 0;
     document.getElementById('zoom-level').value = 1;
-    this.draw();
+    // Only redraw if there are words to show
+    if (this.words3D && this.words3D.length > 0) {
+      this.draw();
+    }
   }
   
   draw() {
@@ -1100,7 +1139,7 @@ class EmbeddingsViewer {
       return;
     }
     
-    if (this.words3D.length === 0) {
+    if (!this.words3D || this.words3D.length === 0) {
       this.drawInitialState();
       return;
     }
@@ -1129,13 +1168,9 @@ class EmbeddingsViewer {
   }
   
   drawInitialState() {
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = '18px Arial';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText('Click "Load GloVe Embeddings" to begin', this.canvas.width / 2, this.canvas.height / 2);
-    this.ctx.font = '14px Arial';
-    this.ctx.fillText('This will download 400K+ pre-trained word vectors', this.canvas.width / 2, this.canvas.height / 2 + 30);
-    this.ctx.fillText('Then enter words to visualize their semantic relationships', this.canvas.width / 2, this.canvas.height / 2 + 50);
+    // Show blank canvas - no content until visualize is clicked
+    // Just keep the black background, no text or instructions
+    // The canvas will appear completely empty until words are visualized
   }
   
   
