@@ -31,6 +31,11 @@ window.addEventListener('DOMContentLoaded', function() {
     document.getElementById('graphCanvas').style.display = 'block';
     generateBtn.disabled = false;
     renderMarkovGraph(markov);
+    
+    // Show Markov transitions visualization
+    if (window.showMarkovTransitions) {
+      window.showMarkovTransitions(markov);
+    }
   };
 
   generateBtn.onclick = function() {
@@ -47,7 +52,7 @@ window.addEventListener('DOMContentLoaded', function() {
       if (markov.generate.length >= 3) {
         // generate(maxWords, seed, recordPath)
         const result = markov.generate(maxWords, seed, true);
-        generated = rsesult.text;
+        generated = result.text;
         path = result.path;
       } else {
         generated = markov.generate(maxWords, seed);

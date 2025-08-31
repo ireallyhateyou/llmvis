@@ -98,6 +98,11 @@ async function loadModel() {
       runBtn.disabled = false;
       runBtn.textContent = "Visualize Attention";
     }
+    
+    // Show attention flow animation
+    if (window.showAttentionFlow) {
+      window.showAttentionFlow();
+    }
     document.getElementById("attn-load-model-btn").disabled = true;
   } catch (e) {
     setStatus("Failed to load model: " + e.message, true);

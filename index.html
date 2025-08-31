@@ -90,6 +90,7 @@
         <option value="markov">Markov Chain</option>
         <option value="lstm">Long Short-Term Memory (LSTM)</option>
         <option value="gpt2">GPT-2</option>
+        <option value="embeddings">Word Embeddings</option>
       </select>
     </div>
   </div>
@@ -121,6 +122,27 @@ But our hearts will find no grave.</textarea>
       <div id="output" style="margin:1em 0; min-height:2em; flex-basis:100%;"></div>
     </form>
     <canvas id="graphCanvas" style="display: none; margin-top:2em; background:#fff; border:1px solid #eee;"></canvas>
+    
+    <!-- NEW: Markov Chain State Transition Visualizer -->
+    <div id="markov-transitions-container" style="margin-top: 2em; display: none;">
+      <h3>State Transition Visualization</h3>
+      <div style="display: flex; gap: 2em; align-items: flex-start;">
+        <div style="flex: 1;">
+          <canvas id="markov-transitions-canvas" width="500" height="400" style="border: 1px solid #ddd; background: #f9f9f9;"></canvas>
+        </div>
+        <div style="flex: 1;">
+          <h4>Transition Matrix</h4>
+          <div id="transition-matrix" style="max-height: 300px; overflow-y: auto; background: #f5f5f5; padding: 1em; border-radius: 5px;">
+            <div style="text-align: center; color: #666;">Train a model to see transitions</div>
+          </div>
+          <div style="margin-top: 1em;">
+            <button id="animate-transitions">▶ Animate Transitions</button>
+            <button id="highlight-path">🔍 Highlight Path</button>
+            <button id="reset-transitions">⏹ Reset</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Markov Info Popup -->
@@ -193,6 +215,30 @@ And by opposing end them.</textarea>
     </div>
     <div id="lstm-status"></div>
     <div id="lstm-vis"></div>
+    
+    <!-- NEW: Neural Network Architecture Viewer -->
+    <div id="nn-architecture-container" style="margin-top: 2em; display: none;">
+      <h3>Neural Network Architecture</h3>
+      <div style="display: flex; gap: 2em; align-items: center;">
+        <div id="nn-canvas-container" style="flex: 1;">
+          <canvas id="nn-architecture-canvas" width="600" height="400" style="border: 1px solid #ddd; background: #f9f9f9;"></canvas>
+        </div>
+        <div style="flex: 1;">
+          <h4>Layer Information</h4>
+          <div id="layer-info" style="text-align: left; padding: 1em; background: #f5f5f5; border-radius: 5px;">
+            <div><strong>Input Layer:</strong> <span id="input-size">--</span> neurons</div>
+            <div><strong>LSTM Layer:</strong> <span id="lstm-size">--</span> units</div>
+            <div><strong>Output Layer:</strong> <span id="output-size">--</span> neurons</div>
+            <div><strong>Total Parameters:</strong> <span id="total-params">--</span></div>
+          </div>
+          <div style="margin-top: 1em;">
+            <button id="animate-forward-pass">▶ Forward Pass</button>
+            <button id="animate-backward-pass">◀ Backward Pass</button>
+            <button id="reset-animation">⏹ Reset</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- LSTM Info Popup -->
@@ -238,6 +284,38 @@ And by opposing end them.</textarea>
       <svg id="attention-graph" width="500" height="300"></svg>
     </div>
     <div id="attn-status"></div>
+    
+    <!-- Attention Flow Animation -->
+    <div id="attention-flow-container" style="margin-top: 2em; display: none;">
+      <h3>Attention Flow Animation</h3>
+      <canvas id="attention-flow-canvas" width="800" height="300" style="width: 100%; height: 300px; border: 1px solid #ccc; background: #f9f9f9; display: block;"></canvas>
+      <div style="margin-top: 1em;">
+        <button id="play-attention-flow" style="margin-right: 0.5em;">▶ Play</button>
+        <button id="pause-attention-flow">⏸ Pause</button>
+        <button id="reset-attention-flow">⏹ Reset</button>
+        <input type="range" id="attention-speed" min="0.1" max="3" step="0.1" value="1" style="width: 100px; margin-left: 1em;">
+        <span id="speed-label">Speed: 1x</span>
+        <input type="range" id="attention-zoom" min="0.5" max="3" step="0.1" value="1.8" style="width: 100px; margin-left: 1em;">
+        <span id="zoom-label">Zoom: 1.8x</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3D Word Embeddings Viewer -->
+  <div id="embeddings-viewer" class="model-container" style="display: none; margin: 2em auto; padding: 2em; border: 2px solid #000000; border-radius: 8px; background: #ffffff; max-width: 1000px; width: 95%;">
+    <h2 style="text-align:center;">3D Word Embeddings Explorer</h2>
+    <div style="margin-bottom: 1em;">
+      <input type="text" id="embedding-input" placeholder="Enter words separated by commas..." style="width: 60%; padding: 0.5em;" value="king, queen, man, woman, computer, technology, love, hate, happy, sad">
+      <button id="visualize-embeddings" style="margin-left: 1em; padding: 0.5em 1em;">Visualize</button>
+    </div>
+    <div id="embeddings-3d-container" style="width: 100%; height: 500px; border: 1px solid #ccc; background: #000; position: relative;">
+      <canvas id="embeddings-3d-canvas" width="800" height="500"></canvas>
+      <div id="embeddings-controls" style="position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.9); padding: 10px; border-radius: 5px;">
+        <div>Rotation: <input type="range" id="rotation-x" min="0" max="360" value="0" style="width: 80px;"></div>
+        <div>Zoom: <input type="range" id="zoom-level" min="0.1" max="3" step="0.1" value="1" style="width: 80px;"></div>
+        <button id="reset-view">Reset View</button>
+      </div>
+    </div>
   </div>
 
   <!-- GPT-2 Info Popup -->
@@ -261,9 +339,10 @@ And by opposing end them.</textarea>
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
   <script type="module" src="gpt2-attn.js"></script>
   <script src="markov.js"></script>
-      <script src="elizabot.js"></script>
-    <script src="eliza.js"></script>
-    <script src="lstm.js"></script>
+  <script src="elizabot.js"></script>
+  <script src="eliza.js"></script>
+  <script src="lstm.js"></script>
+  <script src="visualizations.js"></script>
 
   <script>
     // Model picker logic
@@ -274,29 +353,30 @@ And by opposing end them.</textarea>
     const gpt2Container = document.getElementById('gpt2-container');
     
     modelPicker.addEventListener('change', function() {
+      // Hide all containers first
+      markovContainer.style.display = 'none';
+      elizaContainer.style.display = 'none';
+      lstmContainer.style.display = 'none';
+      gpt2Container.style.display = 'none';
+      
+      // Show selected container
       if (this.value === 'eliza') {
-        markovContainer.style.display = 'none';
         elizaContainer.style.display = 'block';
-        lstmContainer.style.display = 'none';
-        gpt2Container.style.display = 'none';
       } else if (this.value === 'markov') {
         markovContainer.style.display = 'block';
-        elizaContainer.style.display = 'none';
-        lstmContainer.style.display = 'none';
-        gpt2Container.style.display = 'none';
       } else if (this.value === 'lstm') {
-        markovContainer.style.display = 'none';
-        elizaContainer.style.display = 'none';
         lstmContainer.style.display = 'block';
-        gpt2Container.style.display = 'none';
       } else if (this.value === 'gpt2') {
-        markovContainer.style.display = 'none';
-        elizaContainer.style.display = 'none';
-        lstmContainer.style.display = 'none';
         gpt2Container.style.display = 'block';
         // Initialize GPT-2 UI when selected
         if (window.initGPT2UI) {
           window.initGPT2UI();
+        }
+      } else if (this.value === 'embeddings') {
+        document.getElementById('embeddings-viewer').style.display = 'block';
+        // Initialize embeddings viewer
+        if (window.initEmbeddingsViewer) {
+          window.initEmbeddingsViewer();
         }
       }
     });
@@ -748,6 +828,14 @@ And by opposing end them.</textarea>
         };
         gpt2Popup.onclick = function(e) {
           if (e.target === gpt2Popup) gpt2Popup.style.display = 'none';
+        };
+      }
+      
+      // Shakespeare corpus button logic
+      var shakespeareBtn = document.getElementById('shakespeare-corpus-btn');
+      if (shakespeareBtn) {
+        shakespeareBtn.onclick = function() {
+          toggleShakespeareMode();
         };
       }
     });

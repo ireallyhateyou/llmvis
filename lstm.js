@@ -51,6 +51,8 @@ function initTrainingVisualization() {
     </div>
   `;
   
+
+  
   const canvas = document.getElementById('training-chart');
   if (!canvas) {
     console.error('training-chart canvas not found');
@@ -868,7 +870,6 @@ async function generateNextCharacter() {
     // Update displays
     updateGenerationDisplays(nextChar, preds, nextIdx);
     tf.dispose(inputTensor);
-    
   } catch (error) {
     console.error('Generation error:', error);
     showPopupAlert('Generation error: ' + error.message);
@@ -1093,6 +1094,14 @@ async function trainLSTM() {
     const chars = [...new Set(trainText)].sort();
     const vocabSize = chars.length;
     console.log('Vocabulary size:', vocabSize);
+    
+    // Show neural network architecture viewer
+    if (window.showNeuralNetwork) {
+      const inputSize = chars.length;
+      const lstmSize = shakespeareMode ? 512 : 256; // Use appropriate LSTM size
+      const outputSize = chars.length;
+      window.showNeuralNetwork(inputSize, lstmSize, outputSize);
+    }
     // Create character mappings
     const charToIdx = {};
     const idxToChar = {};
